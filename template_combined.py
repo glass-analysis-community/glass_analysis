@@ -80,11 +80,11 @@ for i in range(0, n_files):
   # of particles
   if i == 0:
     particles = dcdfiles[i].N
-    timestep = dcdfiles[i].tbsave
+    timestep = dcdfiles[i].timestep
   else:
     if dcdfiles[i].N != particles:
       raise RuntimeError("Not the same number of particles in each file")
-    if dcdfiles[i].tbsave != timestep:
+    if dcdfiles[i].timestep != timestep:
       raise RuntimeError("Not the same time step in each file")
 
   fileframes[i + 1] = dcdfiles[i].nset

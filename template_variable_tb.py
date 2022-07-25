@@ -139,11 +139,11 @@ for i in range(0, n_runs):
 
       if j == 0:
         particles = dcdfiles[i][j].N
-        timestep = dcdfiles[i][j].tbsave
+        timestep = dcdfiles[i][j].timestep
       else:
         if dcdfiles[i][j].N != particles:
           raise RuntimeError("Not the same number of particles in each file")
-        if dcdfiles[i][j].tbsave != timestep:
+        if dcdfiles[i][j].timestep != timestep:
           raise RuntimeError("Not the same time step in each file")
 
     else:
@@ -283,12 +283,12 @@ for i in np.arange(0, n_frames, framediff):
       dcdfiles[k][which_file].gdcdp(x1, y1, z1, offset)
 
       # Correct for center of mass
-      x -= cm[i][0]
-      y -= cm[i][1]
-      z -= cm[i][2]
-      x1 -= cm[i + j][0]
-      y1 -= cm[i + j][1]
-      z1 -= cm[i + j][2]
+      x -= cm[k][i][0]
+      y -= cm[k][i][1]
+      z -= cm[k][i][2]
+      x1 -= cm[k][i + j][0]
+      y1 -= cm[k][i + j][1]
+      z1 -= cm[k][i + j][2]
 
       # Calculate w function for each particle
       if wtype == wtypes.theta:
@@ -313,23 +313,23 @@ for i in np.arange(0, n_frames, framediff):
       for qindex, q in enumerate(qs):
         # Accumulate for total factors
         if wtype == wtypes.ima:
-          a2_accum[stypes.total][qindex][0] += np.sum(w[0] * np.exp(-1j * q * x))**2
-          a2_accum[stypes.total][qindex][1] += np.sum(w[1] * np.exp(-1j * q * y))**2
-          a2_accum[stypes.total][qindex][2] += np.sum(w[2] * np.exp(-1j * q * z))**2
+          a2_accum[stypes.total.value][qindex][0] += np.sum(w[0] * np.exp(-1j * q * x))**2
+          a2_accum[stypes.total.value][qindex][1] += np.sum(w[1] * np.exp(-1j * q * y))**2
+          a2_accum[stypes.total.value][qindex][2] += np.sum(w[2] * np.exp(-1j * q * z))**2
         else:
-          a2_accum[stypes.total][qindex][0] += np.sum(w * np.exp(-1j * q * x))**2
-          a2_accum[stypes.total][qindex][1] += np.sum(w * np.exp(-1j * q * y))**2
-          a2_accum[stypes.total][qindex][2] += np.sum(w * np.exp(-1j * q * z))**2
+          a2_accum[stypes.total.value][qindex][0] += np.sum(w * np.exp(-1j * q * x))**2
+          a2_accum[stypes.total.value][qindex][1] += np.sum(w * np.exp(-1j * q * y))**2
+          a2_accum[stypes.total.value][qindex][2] += np.sum(w * np.exp(-1j * q * z))**2
 
         # Accumulate for self factors.
         if wtype == wtypes.ima:
-          a2_accum[stypes.self][qindex][0] += np.sum((w[0] * np.exp(-1j * q * x))**2)
-          a2_accum[stypes.self][qindex][1] += np.sum((w[1] * np.exp(-1j * q * y))**2)
-          a2_accum[stypes.self][qindex][2] += np.sum((w[2] * np.exp(-1j * q * z))**2)
+          a2_accum[stypes.self.value][qindex][0] += np.sum((w[0] * np.exp(-1j * q * x))**2)
+          a2_accum[stypes.self.value][qindex][1] += np.sum((w[1] * np.exp(-1j * q * y))**2)
+          a2_accum[stypes.self.value][qindex][2] += np.sum((w[2] * np.exp(-1j * q * z))**2)
         else:
-          a2_accum[stypes.self][qindex][0] += np.sum((w * np.exp(-1j * q * x))**2)
-          a2_accum[stypes.self][qindex][1] += np.sum((w * np.exp(-1j * q * y))**2)
-          a2_accum[stypes.self][qindex][2] += np.sum((w * np.exp(-1j * q * z))**2)
+          a2_accum[stypes.self.value][qindex][0] += np.sum((w * np.exp(-1j * q * x))**2)
+          a2_accum[stypes.self.value][qindex][1] += np.sum((w * np.exp(-1j * q * y))**2)
+          a2_accum[stypes.self.value][qindex][2] += np.sum((w * np.exp(-1j * q * z))**2)
 
         # Accumulate for second term of variance calculation for q=0.0
         if qindex == 0:
@@ -337,13 +337,13 @@ for i in np.arange(0, n_frames, framediff):
 
     # Normalize accumulators by number of runs to obtain expectation
     # values
-    a2_accum / n_runs
-    a_accum_s / n_runs
+    a2_accum /= n_runs
+    a_accum_s /= n_runs
 
     # Calculate the variance for the current index and add it to the
     # accumulator entry corresponding to the value of t_b
-    variance[stypes.total][index] += a2_accum[stypes.total].real / particles
-    variance[stypes.self][index] += a2_accum[stypes.self].real / particles
+    variance[stypes.total.value][index] += a2_accum[stypes.total.value].real / particles
+    variance[stypes.self.value][index] += a2_accum[stypes.self.value].real / particles
 
     # Case for q=0.0, where w value of each particle (stored in
     # a_accum_s) must be used in order to find the term to subtract to
@@ -351,11 +351,11 @@ for i in np.arange(0, n_frames, framediff):
     # loop, as averaging over runs must be done before multiplication
     # of terms.
     if wtype == wtypes.ima:
-      variance[stypes.total][index][0] -= (np.sum(a_accum_s, axis=1)**2).real / particles
-      variance[stypes.self][index][0] -= np.sum(a_accum_s**2, axis=1).real / particles
+      variance[stypes.total.value][index][0] -= (np.sum(a_accum_s, axis=1)**2).real / particles
+      variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2, axis=1).real / particles
     else:
-      variance[stypes.total][index][0] -= (np.sum(a_accum_s)**2).real / particles
-      variance[stypes.self][index][0] -= np.sum(a_accum_s**2).real / particles
+      variance[stypes.total.value][index][0] -= (np.sum(a_accum_s)**2).real / particles
+      variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2).real / particles
 
     # Accumulate the normalization value for this sample offset, which
     # we will use later in computing the mean value for each t_b
@@ -380,7 +380,7 @@ elif wtype == wtypes.ima:
 
 # Find the distinct component of the variance by subtracting the self
 # part from the total.
-variance[stypes.distinct] = variance[stypes.total] - variance[stypes.self]
+variance[stypes.distinct.value] = variance[stypes.total.value] - variance[stypes.self.value]
 
 # Normalize the accumulated values, thereby obtaining averages over
 # each pair of frames
@@ -396,8 +396,8 @@ for stype in stypes:
   for qindex, q in enumerate(qs):
     for i in range(0, n_samples):
       time_tb = samples[i] * timestep
-      var = variance[stype][i][qindex]
+      var = variance[stype.value][i][qindex]
       # Print stype, t_b, q value, x, y, and z averages, number of
       # frame sets contributing to such average, and frame difference
       # corresponding to t_b
-      print("%s %f %f %f %f %f %d %d" %(label, time_tb, q, var[0], var[1], var[2], norm[i], samples[i]))
+      print("%s %f %f %f %f %f %d %d" %(label, q, time_tb, var[0], var[1], var[2], norm[i], samples[i]))
