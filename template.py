@@ -78,7 +78,7 @@ n_frames = total_frames - start
 
 # Construct list of frame difference numbers for sampling according to
 # a method of increasing spacing
-magnitude = math.floor(math.log(n_frames / 50, 5))
+magnitude = math.floor(math.log((n_frames - 1) / 50, 5))
 
 frames_beyond_magnitude = n_frames - 1
 for i in range(0, magnitude + 1):
@@ -113,9 +113,9 @@ cmy = np.empty(n_frames, dtype=float)
 cmz = np.empty(n_frames, dtype=float)
 
 # Result of scattering function for each difference in times
-fcx = np.empty(n_samples, dtype=float)
-fcy = np.empty(n_samples, dtype=float)
-fcz = np.empty(n_samples, dtype=float)
+fcx = np.zeros(n_samples, dtype=float)
+fcy = np.zeros(n_samples, dtype=float)
+fcz = np.zeros(n_samples, dtype=float)
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
 
