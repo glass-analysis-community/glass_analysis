@@ -10,7 +10,7 @@ def usage():
         "-n Number of files",
         "-r Number of runs, numbered as folders",
         "-s Frame number to start on (index starts at 1)",
-        "-d Number of evenly spaced initial times to average over (N_t)",
+        "-d Spacing between initial times (dt)",
 #        "-x Number of Fourier transform vector constants to used in addition to q=0",
         "-y Box size in each dimension (assumed to be cubic, required)"
         "-b Average interval in frames (t_b)",
@@ -59,8 +59,8 @@ n_files = 1
 n_runs = 0
 # What frame number to start on
 start = 0
-# User-defined value for number of initial times (N_t)
-n_init = None
+# Spacing between initial times (dt)
+framediff = 10
 # Number of Fourier transform vector constants (including q=0)
 n_q = 1
 # User-defined value of dimension of box, assumed to be cubic
@@ -92,7 +92,7 @@ for o, a in opts:
   elif o == "-s":
     start = int(a) - 1
   elif o == "-d":
-    n_init = int(a)
+    framediff = int(a)
   elif o == "-x":
     n_q = int(a) + 1
   elif o == "-y":
@@ -199,12 +199,6 @@ print("#timestep: %f" %timestep)
 
 # Number of frames in each run to analyze
 n_frames = total_frames - start
-
-# Spacing between initial times
-if n_init != None:
-  framediff = n_frames // n_init
-else:
-  framediff = 10
 
 # Largest possible lag
 max_lag = n_frames - tb - 1
