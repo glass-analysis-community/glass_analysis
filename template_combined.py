@@ -179,7 +179,10 @@ for i in np.arange(0, n_frames, framediff):
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
   # which are within the range of the files.
-  for index, j in enumerate(samples[samples < (n_frames - i)]):
+  for index, j in enumerate(samples):
+    if samples >= (n_frames - i):
+      continue
+
     which_file = np.searchsorted(fileframes, start + i + j, side="right") - 1
     offset = start + i + j - fileframes[which_file]
     dcdfiles[which_file].gdcdp(x1, y1, z1, offset)

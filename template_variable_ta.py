@@ -322,7 +322,10 @@ for i in np.arange(0, n_frames, framediff):
   # Iterate over ending points for structure factor and add to
   # accumulated structure factor, making sure to only use indices
   # which are within the range of the files. j is used as t_b.
-  for index, j in enumerate(samples[(samples >= (tc - i)) & (samples < (n_samples - i - tb - tc))]):
+  for index, j in enumerate(samples):
+    if j < (tc - i) or j >= (n_frames - i - tb):
+      continue
+
     # Clear run accumulators. j is used to indicate a python complex
     # number, not the variable j.
     a2_accum[:] = 0.0+0.0j
@@ -335,7 +338,7 @@ for i in np.arange(0, n_frames, framediff):
       calculate_w(w[0], k, x0, y0, z0, x1, y1, z1, i, i + tb - tc)
 
       # Calculate w values for t1 and t2
-      calculate_w(w[1], k, x2, y2, z2, x3, y3, z3, i + j - tc, i + j + tb + tc)
+      calculate_w(w[1], k, x2, y2, z2, x3, y3, z3, i + j - tc, i + j + tb)
 
       for qindex, q in enumerate(qs):
         # Calculate sums of w functions multiplied by imaginary

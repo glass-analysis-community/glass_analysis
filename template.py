@@ -138,7 +138,10 @@ for i in np.arange(0, n_frames, 10):
   # Iterate over ending points for scattering function and add to
   # accumulated scattering values, making sure to only use indices
   # which are within the range of the files.
-  for index, j in enumerate(samples[samples < (n_frames - i)]):
+  for index, j in enumerate(samples):
+    if samples >= (n_frames - i):
+      continue
+
     which_file = np.searchsorted(fileframes, i + j + start, side="right") - 1
     offset = i + j - (fileframes[which_file] - start)
     dcdfiles[which_file].gdcdp(x1, y1, z1, offset)

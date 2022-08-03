@@ -214,7 +214,10 @@ for i in np.arange(0, n_frames, framediff):
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
   # which are within the range of the files.
-  for index, j in enumerate(samples[samples < (n_frames - i)]):
+  for index, j in enumerate(samples):
+    if samples >= (n_frames - i):
+      continue
+
     # Clear accumulator values
     msd_a_accum = 0.0
     overlap_a_accum = 0.0
