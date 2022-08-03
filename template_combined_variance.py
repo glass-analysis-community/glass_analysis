@@ -271,7 +271,7 @@ for i in np.arange(0, n_frames, framediff):
     # Calculate variances for lag index
     fc[index] += particles * (fc_a2_accum - fc_a_accum**2)
     msd[index] += particles * (msd_a2_accum - msd_a_accum**2)
-    overlap[index] += particles * (msd_a2_accum - msd_a_accum**2)
+    overlap[index] += particles * (overlap_a2_accum - overlap_a_accum**2)
 
     # Accumulate the normalization value for this sample offset, which
     # we will use later in computing the mean scattering value for each
