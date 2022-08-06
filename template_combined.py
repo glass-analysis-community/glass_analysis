@@ -180,7 +180,7 @@ for i in np.arange(0, n_frames, framediff):
   # accumulated values, making sure to only use indices
   # which are within the range of the files.
   for index, j in enumerate(samples):
-    if samples >= (n_frames - i):
+    if j >= (n_frames - i):
       continue
 
     which_file = np.searchsorted(fileframes, start + i + j, side="right") - 1

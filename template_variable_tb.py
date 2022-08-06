@@ -264,7 +264,7 @@ for i in np.arange(0, n_frames, framediff):
   # accumulated structure factor, making sure to only use indices
   # which are within the range of the files. j is used as t_b.
   for index, j in enumerate(samples):
-    if samples >= (n_frames - i):
+    if j >= (n_frames - i):
       continue
 
     # Clear run accumulators. j is used to indicate a python complex
