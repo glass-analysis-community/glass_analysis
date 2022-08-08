@@ -8,7 +8,7 @@ import getopt
 def usage():
   print("Arguments:",
         "-p Number of particles along one dimension (total particles is cube of this)",
-        "-s Standard deviation (sigma^2) for use in random function",
+        "-s Standard deviation (sigma) for use in random function",
         "-f Number of frames in generated trajectory",
         "-d Initial particle density, over dcd file length units",
         "-h Print usage",
@@ -26,7 +26,7 @@ n_particles = None
 # Initial particle density of system
 density = None
 # Standard deviation to use for Gaussian offset function
-sigma2 = None
+sigma = None
 # Number of trajectory frames to generate
 n_frames = None
 
@@ -37,7 +37,7 @@ for o, a in opts:
   elif o == "-p":
     n_particles = int(a)
   elif o == "-s":
-    sigma2 = float(a)
+    sigma = float(a)
   elif o == "-f":
     n_frames = int(a)
   elif o == "-d":
@@ -45,7 +45,7 @@ for o, a in opts:
 
 if n_particles == None:
   raise RuntimeError("Must specify number of particles")
-if sigma2 == None:
+if sigma == None:
   raise RuntimeError("Must specify sigma^2 parameter for Gaussian offset function")
 if n_frames == None:
   raise RuntimeError("Must specify number of frames in generated trajectory")
@@ -71,7 +71,7 @@ rng = np.random.default_rng()
 
 # Generate and write frames
 for i in range(0, n_frames):
-  x += rng.normal(scale=sigma2, size=(n_particles, n_particles, n_particles))
-  y += rng.normal(scale=sigma2, size=(n_particles, n_particles, n_particles))
-  z += rng.normal(scale=sigma2, size=(n_particles, n_particles, n_particles))
+  x += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+  y += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+  z += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
   traj_file.adcdp(x, y, z)
