@@ -16,13 +16,12 @@ def usage():
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
         "-p Limit number of particles to argument",
-        "-j Summation before expectation",
         "-h Print usage",
         "Interval increase progression (last specified is used):"
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
         "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is number of lags)",
         "-l Linear spacing progression, uses same spacing as initial times (no argument)",
-        "-m Mirror lags to have neative values",
+        "-m Mirror lags to have negative values",
         "w function types (last specified is used, must be specified):",
         "-t Theta function threshold (argument is threshold radius)",
         "-u Double negative exponential/Gaussian (argument is exponential length)",
@@ -71,9 +70,6 @@ tb = 1
 tc = 0
 # Number of particles to limit analysis to
 particle_limit = None
-# Whether to calculate sum over particles before averaging for second
-# term of self part of s4
-sum_before_average = False
 # Type of progression to increase time interval by
 progtype = progtypes.flenner
 # Whether to use mirrored negative lags
@@ -113,7 +109,7 @@ for o, a in opts:
   elif o == "-m":
     negative_lags = True
   elif o == "-j":
-    sum_before_average = True
+    print("-j is default, no need to specify", file=sys.stderr)
   elif o == "-t":
     wtype = wtypes.theta
     radius = float(a)
@@ -320,12 +316,8 @@ ab_accum = np.empty((2, n_q, 3), dtype=float)
 # Special case accumulator of w values across runs, needed for
 # combination of q=0.0 and self part. Only real values are ever
 # accumulated to these, so they can be float.
-if sum_before_average == True:
-  a_accum_s = 0.0
-  b_accum_s = 0.0
-else:
-  a_accum_s = np.empty(particles, dtype=float)
-  b_accum_s = np.empty(particles, dtype=float)
+a_accum_s = 0.0
+b_accum_s = 0.0
 
 def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, index1, index2):
   # Get values for start of w function
@@ -383,12 +375,8 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
 
     # Clear run accumulators.
     ab_accum[:] = 0.0
-    if sum_before_average == True:
-      a_accum_s = 0.0
-      b_accum_s = 0.0
-    else:
-      a_accum_s[:] = 0.0
-      b_accum_s[:] = 0.0
+    a_accum_s = 0.0
+    b_accum_s = 0.0
 
     # Iterate over files
     for k in range(0, n_runs):
@@ -415,14 +403,8 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
         ab_accum[stypes.self.value][qindex][2] += np.sum(w[0] * w[1] * np.cos(q * (z0 - z2)))
 
         if qindex == 0:
-          if sum_before_average == True:
-            a_accum_s += np.sum(w[0])
-            b_accum_s += np.sum(w[1])
-          else:
-            # Broadcasts correctly regardless of dimensionality of w, as
-            # dimensions of a_accum_s and w match.
-            a_accum_s += w[0]
-            b_accum_s += w[1]
+          a_accum_s += np.sum(w[0])
+          b_accum_s += np.sum(w[1])
 
     # Normalize accumulators by number of runs to obtain expectation
     # values
@@ -437,15 +419,9 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
 
     # Case for q=0.0, where w value of each particle (stored in
     # a_accum_s) must be used in order to find the term to subtract to
-    # find the variance. The summing cannot be done inside the run
-    # loop, as averaging over runs must be done before multiplication
-    # of terms.
-    if sum_before_average == True:
-      s4[stypes.total.value][index][0] -= (a_accum_s * b_accum_s) / particles
-      s4[stypes.self.value][index][0] -= (a_accum_s * b_accum_s) / particles**2
-    else:
-      s4[stypes.total.value][index][0] -= (np.sum(a_accum_s) * np.sum(b_accum_s)) / particles
-      s4[stypes.self.value][index][0] -= np.sum(a_accum_s * b_accum_s) / particles
+    # find the variance.
+    s4[stypes.total.value][index][0] -= (a_accum_s * b_accum_s) / particles
+    s4[stypes.self.value][index][0] -= (a_accum_s * b_accum_s) / particles**2
 
     # Accumulate the normalization value for this lag value, which
     # we will use later in computing the mean value for each t_b
@@ -454,7 +430,6 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
 
 print("#dt = %d" %framediff)
-print("#sum_before_average = %s" %(str(sum_before_average)))
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 
