@@ -127,7 +127,7 @@ for i in range(0, n_frames):
   dx += lmx
   dy += lmy
   dz += lmz
-  x += rng.permuted(dx).reshape((n_particles, n_particles, n_particles))
-  y += rng.permuted(dy).reshape((n_particles, n_particles, n_particles))
-  z += rng.permuted(dz).reshape((n_particles, n_particles, n_particles))
+  x += rng.permutation(dx).reshape((n_particles, n_particles, n_particles))
+  y += rng.permutation(dy).reshape((n_particles, n_particles, n_particles))
+  z += rng.permutation(dz).reshape((n_particles, n_particles, n_particles))
   traj_file.adcdp(x, y, z)
