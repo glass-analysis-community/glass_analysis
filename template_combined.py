@@ -12,6 +12,7 @@ def usage():
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
+        "-p Limit number of particles to argument",
         "-h Print usage",
         "Interval increase progression (last specified is used):"
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
@@ -19,7 +20,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:p:hfg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -39,6 +40,8 @@ framediff = 10
 radius = 0.25
 # Scattering vector constant
 q = 7.25
+# Number of particles to limit analysis to
+particle_limit = None
 # Type of progression to increase time interval by
 progtype = progtypes.flenner
 
@@ -56,6 +59,8 @@ for o, a in opts:
     radius = float(a)
   elif o == "-q":
     q = float(a)
+  elif o == "-p":
+    particle_limit = int(a)
   elif o == "-f":
     progtype = progtypes.flenner
   elif o == "-g":
@@ -79,16 +84,29 @@ for i in range(0, n_files):
   # Make sure each trajectory file has the same  time step and number
   # of particles
   if i == 0:
-    particles = dcdfiles[i].N
+    # Number of particles in files, may not be same as limited
+    # number in analysis
+    fparticles = dcdfiles[i].N
+
     timestep = dcdfiles[i].timestep
   else:
-    if dcdfiles[i].N != particles:
+    if dcdfiles[i].N != fparticles:
       raise RuntimeError("Not the same number of particles in each file")
     if dcdfiles[i].timestep != timestep:
       raise RuntimeError("Not the same time step in each file")
 
   fileframes[i + 1] = dcdfiles[i].nset
   total_frames += dcdfiles[i].nset
+
+# Limit particles if necessary
+if particle_limit == None:
+  particles = fparticles
+else:
+  if particle_limit < fparticles:
+    particles = particle_limit
+  else:
+    particles = fparticles
+    particle_limit = None
 
 # Now holds total index of last frame in each file
 fileframes = np.cumsum(fileframes)
@@ -137,10 +155,16 @@ elif progtype == progtypes.geometric:
 
   n_samples = samples.size
 
+# If particles limited, must be read into different array
+if particle_limit != None:
+  x = np.empty(fparticles, dtype=np.single)
+  y = np.empty(fparticles, dtype=np.single)
+  z = np.empty(fparticles, dtype=np.single)
+
 # Stores coordinates of all particles in a frame
-x = np.empty(particles, dtype=np.single)
-y = np.empty(particles, dtype=np.single)
-z = np.empty(particles, dtype=np.single)
+x0 = np.empty(particles, dtype=np.single)
+y0 = np.empty(particles, dtype=np.single)
+z0 = np.empty(particles, dtype=np.single)
 x1 = np.empty(particles, dtype=np.single)
 y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
@@ -174,7 +198,13 @@ for i in range(0, n_frames):
 for i in np.arange(0, n_frames, framediff):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
-  dcdfiles[which_file].gdcdp(x, y, z, offset)
+  if particle_limit == None:
+    dcdfiles[run][which_file].gdcdp(x0, y0, z0, offset)
+  else:
+    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
+    x0[:] = x[:particles]
+    y0[:] = y[:particles]
+    z0[:] = z[:particles]
 
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
@@ -185,23 +215,29 @@ for i in np.arange(0, n_frames, framediff):
 
     which_file = np.searchsorted(fileframes, start + i + j, side="right") - 1
     offset = start + i + j - fileframes[which_file]
-    dcdfiles[which_file].gdcdp(x1, y1, z1, offset)
+    if particle_limit == None:
+      dcdfiles[run][which_file].gdcdp(x1, y1, z1, offset)
+    else:
+      dcdfiles[run][which_file].gdcdp(x, y, z, offset)
+      x1[:] = x[:particles]
+      y1[:] = y[:particles]
+      z1[:] = z[:particles]
 
     # Get means of scattering functions of all the particles for each
     # coordinate
-    fc[index][0] += np.mean(np.cos(q * ((x1 - cm[i + j][0]) - (x - cm[i][0]))))
-    fc[index][1] += np.mean(np.cos(q * ((y1 - cm[i + j][1]) - (y - cm[i][1]))))
-    fc[index][2] += np.mean(np.cos(q * ((z1 - cm[i + j][2]) - (z - cm[i][2]))))
+    fc[index][0] += np.mean(np.cos(q * ((x1 - cm[i + j][0]) - (x0 - cm[i][0]))))
+    fc[index][1] += np.mean(np.cos(q * ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))))
+    fc[index][2] += np.mean(np.cos(q * ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))))
 
     # Add msd value to accumulated value
-    msd[index] += np.mean(((x1 - cm[i + j][0]) - (x - cm[i][0]))**2 +
-                          ((y1 - cm[i + j][1]) - (y - cm[i][1]))**2 +
-                          ((z1 - cm[i + j][2]) - (z - cm[i][2]))**2)
+    msd[index] += np.mean(((x1 - cm[i + j][0]) - (x0 - cm[i][0]))**2 +
+                          ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))**2 +
+                          ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2)
 
     # Add overlap value to accumulated value
-    overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i + j][0]) - (x - cm[i][0]))**2 +
-                                              ((y1 - cm[i + j][1]) - (y - cm[i][1]))**2 +
-                                              ((z1 - cm[i + j][2]) - (z - cm[i][2]))**2), radius).astype(int))
+    overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i + j][0]) - (x0 - cm[i][0]))**2 +
+                                              ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))**2 +
+                                              ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2), radius).astype(int))
 
     # Accumulate the normalization value for this sample offset, which
     # we will use later in computing the mean scattering value for each
