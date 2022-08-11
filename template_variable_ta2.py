@@ -15,7 +15,7 @@ def usage():
         "-y Box size in each dimension (assumed to be cubic, required)"
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
-        "-p Limit number of particles to argument",
+        "-p Limit number of particles to analyze",
         "-h Print usage",
         "Interval increase progression (last specified is used):"
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",

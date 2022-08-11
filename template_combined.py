@@ -12,7 +12,8 @@ def usage():
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
-        "-p Limit number of particles to argument",
+        "-o Start index (from 1) of particles to limit analysis to"
+        "-p End index (from 1) of particles to limit analysis to",
         "-h Print usage",
         "Interval increase progression (last specified is used):"
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
@@ -20,7 +21,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:o:p:hfg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -40,8 +41,11 @@ framediff = 10
 radius = 0.25
 # Scattering vector constant
 q = 7.25
-# Number of particles to limit analysis to
-particle_limit = None
+# Whether to limit analysis to subset of particles, and upper and lower
+# indices for limit.
+limit_particles = False
+upper_limit = None
+lower_limit = None
 # Type of progression to increase time interval by
 progtype = progtypes.flenner
 
@@ -59,8 +63,12 @@ for o, a in opts:
     radius = float(a)
   elif o == "-q":
     q = float(a)
+  elif o == "-o":
+    limit_particles = True
+    lower_limit = int(a) - 1
   elif o == "-p":
-    particle_limit = int(a)
+    limit_particles = True
+    upper_limit = int(a)
   elif o == "-f":
     progtype = progtypes.flenner
   elif o == "-g":
@@ -99,14 +107,19 @@ for i in range(0, n_files):
   total_frames += dcdfiles[i].nset
 
 # Limit particles if necessary
-if particle_limit == None:
+if limit_particles == False:
   particles = fparticles
 else:
-  if particle_limit < fparticles:
-    particles = particle_limit
+  if lower_limit == None:
+    lower_limit = 0
+  if upper_limit == None:
+    upper_limit = fparticles
+
+  if lower_limit != 0 or upper_limit < fparticles:
+    particles = upper_limit - lower_limit
   else:
     particles = fparticles
-    particle_limit = None
+    limit_particles = False
 
 # Now holds total index of last frame in each file
 fileframes = np.cumsum(fileframes)
@@ -156,7 +169,7 @@ elif progtype == progtypes.geometric:
   n_samples = samples.size
 
 # If particles limited, must be read into different array
-if particle_limit != None:
+if limit_particles == True:
   x = np.empty(fparticles, dtype=np.single)
   y = np.empty(fparticles, dtype=np.single)
   z = np.empty(fparticles, dtype=np.single)
@@ -189,22 +202,29 @@ print("Finding centers of mass for frames", file=sys.stderr)
 for i in range(0, n_frames):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
-  dcdfiles[which_file].gdcdp(x, y, z, offset)
-  cm[i][0] = np.mean(x)
-  cm[i][1] = np.mean(y)
-  cm[i][2] = np.mean(z)
+  if limit_particles == True:
+    dcdfiles[which_file].gdcdp(x, y, z, offset)
+    x0[:] = x[lower_limit:upper_limit]
+    y0[:] = y[lower_limit:upper_limit]
+    z0[:] = z[lower_limit:upper_limit]
+  else:
+    dcdfiles[which_file].gdcdp(x0, y0, z0, offset)
+
+  cm[i][0] = np.mean(x0)
+  cm[i][1] = np.mean(y0)
+  cm[i][2] = np.mean(z0)
 
 # Iterate over starting points for functions
 for i in np.arange(0, n_frames, framediff):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
-  if particle_limit == None:
-    dcdfiles[run][which_file].gdcdp(x0, y0, z0, offset)
+  if limit_particles == True:
+    dcdfiles[which_file].gdcdp(x, y, z, offset)
+    x0[:] = x[lower_limit:upper_limit]
+    y0[:] = y[lower_limit:upper_limit]
+    z0[:] = z[lower_limit:upper_limit]
   else:
-    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    x0[:] = x[:particles]
-    y0[:] = y[:particles]
-    z0[:] = z[:particles]
+    dcdfiles[which_file].gdcdp(x0, y0, z0, offset)
 
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
@@ -215,13 +235,13 @@ for i in np.arange(0, n_frames, framediff):
 
     which_file = np.searchsorted(fileframes, start + i + j, side="right") - 1
     offset = start + i + j - fileframes[which_file]
-    if particle_limit == None:
-      dcdfiles[run][which_file].gdcdp(x1, y1, z1, offset)
+    if limit_particles == True:
+      dcdfiles[which_file].gdcdp(x, y, z, offset)
+      x1[:] = x[lower_limit:upper_limit]
+      y1[:] = y[lower_limit:upper_limit]
+      z1[:] = z[lower_limit:upper_limit]
     else:
-      dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-      x1[:] = x[:particles]
-      y1[:] = y[:particles]
-      z1[:] = z[:particles]
+      dcdfiles[which_file].gdcdp(x1, y1, z1, offset)
 
     # Get means of scattering functions of all the particles for each
     # coordinate
