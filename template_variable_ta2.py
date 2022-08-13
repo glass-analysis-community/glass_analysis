@@ -208,11 +208,11 @@ else:
 if progtype == progtypes.flenner:
   # Construct list of frame difference numbers for sampling according
   # to a method of increasing spacing
-  magnitude = math.floor(math.log(max_lag / 50, 5))
-
+  magnitude = -1
   frames_beyond_magnitude = max_lag
-  for i in range(0, magnitude + 1):
-    frames_beyond_magnitude -= 50 * 5**i
+  while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
+    magnitude += 1
+    frames_beyond_magnitude -= 50 * 5**magnitude
 
   lags_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
 

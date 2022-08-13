@@ -78,11 +78,11 @@ n_frames = total_frames - start
 
 # Construct list of frame difference numbers for sampling according to
 # a method of increasing spacing
-magnitude = math.floor(math.log((n_frames - 1) / 50, 5))
-
+magnitude = -1
 frames_beyond_magnitude = n_frames - 1
-for i in range(0, magnitude + 1):
-  frames_beyond_magnitude -= 50 * 5**i
+while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
+  magnitude += 1
+  frames_beyond_magnitude -= 50 * 5**magnitude
 
 samples_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
 
