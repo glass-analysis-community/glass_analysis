@@ -16,7 +16,7 @@ def usage():
         "-y Box size in each dimension (assumed to be cubic, required)"
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
-        "-p Limit number of particles to argument",
+        "-p Limit number of particles to analyze",
         "-h Print usage",
         "w function types (last specified is used, must be specified):",
         "-t Theta function threshold (argument is threshold radius)",
@@ -179,6 +179,9 @@ fileframes = np.cumsum(fileframes)
 print("#nset: %d" %total_frames)
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
+
+# Spatial size of individual cell for FFT
+cell = box_size / size_fft
 
 # Number of frames in each run to analyze
 n_frames = total_frames - start
@@ -426,22 +429,13 @@ for i in range(0, n_init):
       # Calculate w values for t1 and t2
       calculate_w(w[1], k, x1, y1, z1, x2, y2, z2, i + ta // framediff, ttypes.t3, ttypes.t4)
 
-      # Align particle coordinates to make sum equivalent to total part.
-      # If not performant, this could possibly be reimplemented with
-      # numexpr.
-      np.multiply((x0 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=x0)
-      np.multiply((y0 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=y0)
-      np.multiply((z0 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=z0)
-      np.multiply((x1 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=x1)
-      np.multiply((y1 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=y1)
-      np.multiply((z1 // (box_size / size_fft)) + 0.5, (box_size / size_fft), out=z1)
-
-      # Subtract aligned particle coordinates to find difference. Since
-      # total exponential is negative, must use reverse difference with
+      # Align particle coordinates to make sum equivalent to total
+      # part and find difference in positions for binning. Since total
+      # exponential is negative, must use reverse difference with
       # positive-exponential FFT.
-      x0 -= x1
-      y0 -= y1
-      z0 -= z1
+      x0[:] = ((x0 // cell) - (x1 // cell) + 0.5) * cell
+      y0[:] = ((y0 // cell) - (y1 // cell) + 0.5) * cell
+      z0[:] = ((z0 // cell) - (z1 // cell) + 0.5) * cell
 
       # Wrap particle coordinates to box. If not done, particles will
       # not be distributed across bins correctly.
