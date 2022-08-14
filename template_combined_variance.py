@@ -101,11 +101,14 @@ for i in range(0, n_runs):
         particles = dcdfiles[i][j].N
 
         timestep = dcdfiles[i][j].timestep
+        tbsave = dcdfiles[i][j].tbsave
       else:
         if dcdfiles[i][j].N != particles:
           raise RuntimeError("Not the same number of particles in each file")
         if dcdfiles[i][j].timestep != timestep:
           raise RuntimeError("Not the same time step in each file")
+        if dcdfiles[i][j].tbsave != tbsave:
+          raise RuntimeError("Not the same frame difference between saves in each file")
 
     else:
       if dcdfiles[i][j].nset != fileframes[j + 1]:
@@ -115,6 +118,8 @@ for i in range(0, n_runs):
         raise RuntimeError("Not the same number of particles in each file")
       if dcdfiles[i][j].timestep != timestep:
         raise RuntimeError("Not the same time step in each file")
+      if dcdfiles[i][j].tbsave != tbsave:
+        raise RuntimeError("Not the same frame difference between saves in each file")
 
 # Now holds total index of last frame in each file
 fileframes = np.cumsum(fileframes)
@@ -123,6 +128,7 @@ fileframes = np.cumsum(fileframes)
 print("#nset: %d" %total_frames)
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
+print("#tbsave: %f" %tbsave)
 
 # Number of frames to analyze
 n_frames = total_frames - start
@@ -298,7 +304,7 @@ overlap /= norm
 msd /= norm
 
 for i in range(0, n_samples):
-  time = samples[i] * timestep
+  time = samples[i] * timestep * tbsave
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, number of frame sets contributing to
   # such averages, and frame difference

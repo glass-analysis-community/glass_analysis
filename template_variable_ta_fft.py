@@ -146,12 +146,15 @@ for i in range(0, n_runs):
         # number in analysis
         fparticles = dcdfiles[i][j].N
 
-        timestep = dcdfiles[i][j].timestep
+        timestep = dcdfiles[i].timestep
+        tbsave = dcdfiles[i].tbsave
       else:
         if dcdfiles[i][j].N != fparticles:
           raise RuntimeError("Not the same number of particles in each file")
         if dcdfiles[i][j].timestep != timestep:
           raise RuntimeError("Not the same time step in each file")
+        if dcdfiles[i][j].tbsave != tbsave:
+          raise RuntimeError("Not the same frame difference between saves in each file")
 
     else:
       if dcdfiles[i][j].nset != fileframes[j + 1]:
@@ -161,6 +164,8 @@ for i in range(0, n_runs):
         raise RuntimeError("Not the same number of particles in each file")
       if dcdfiles[i][j].timestep != timestep:
         raise RuntimeError("Not the same time step in each file")
+      if dcdfiles[i][j].tbsave != tbsave:
+        raise RuntimeError("Not the same frame difference between saves in each file")
 
 # Limit particles if necessary
 if particle_limit == None:
@@ -179,6 +184,7 @@ fileframes = np.cumsum(fileframes)
 print("#nset: %d" %total_frames)
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
+print("#tbsave: %f" %tbsave)
 
 # Spatial size of individual cell for FFT
 cell = box_size / size_fft
@@ -496,7 +502,7 @@ for i in range(0, n_lags):
   for j in range(0, size_fft):
     for k in range(0, size_fft):
       for l in range(0, (size_fft // 2) + 1):
-        time_ta = lags[i] * timestep
+        time_ta = lags[i] * timestep * tbsave
         # Print t_a, x, y, and z components of fft frequency, total,
         # self, and distinct averages, number of frame sets
         # contributing to such average, and frame difference

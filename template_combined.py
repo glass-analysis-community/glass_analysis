@@ -97,11 +97,14 @@ for i in range(0, n_files):
     fparticles = dcdfiles[i].N
 
     timestep = dcdfiles[i].timestep
+    tbsave = dcdfiles[i].tbsave
   else:
     if dcdfiles[i].N != fparticles:
       raise RuntimeError("Not the same number of particles in each file")
     if dcdfiles[i].timestep != timestep:
       raise RuntimeError("Not the same time step in each file")
+    if dcdfiles[i].tbsave != tbsave:
+      raise RuntimeError("Not the same frame difference between saves in each file")
 
   fileframes[i + 1] = dcdfiles[i].nset
   total_frames += dcdfiles[i].nset
@@ -281,7 +284,7 @@ overlap /= norm
 msd /= norm
 
 for i in range(0, n_samples):
-  time = samples[i] * timestep
+  time = samples[i] * timestep * tbsave
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, number of frame sets contributing to
   # such averages, and frame difference

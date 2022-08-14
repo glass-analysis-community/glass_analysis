@@ -160,11 +160,14 @@ for i in range(0, n_runs):
         fparticles = dcdfiles[i][j].N
 
         timestep = dcdfiles[i][j].timestep
+        tbsave = dcdfiles[i][j].tbsave
       else:
         if dcdfiles[i][j].N != fparticles:
           raise RuntimeError("Not the same number of particles in each file")
         if dcdfiles[i][j].timestep != timestep:
           raise RuntimeError("Not the same time step in each file")
+        if dcdfiles[i][j].tbsave != tbsave:
+          raise RuntimeError("Not the same frame difference between saves in each file")
 
     else:
       if dcdfiles[i][j].nset != fileframes[j + 1]:
@@ -174,6 +177,8 @@ for i in range(0, n_runs):
         raise RuntimeError("Not the same number of particles in each file")
       if dcdfiles[i][j].timestep != timestep:
         raise RuntimeError("Not the same time step in each file")
+      if dcdfiles[i][j].tbsave != tbsave:
+        raise RuntimeError("Not the same frame difference between saves in each file")
 
 # Limit particles if necessary
 if particle_limit == None:
@@ -192,6 +197,7 @@ fileframes = np.cumsum(fileframes)
 print("#nset: %d" %total_frames)
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
+print("#tbsave: %f" %tbsave)
 
 # Number of frames in each run to analyze
 n_frames = total_frames - start
@@ -461,7 +467,7 @@ for stype in stypes:
 
   for qindex, q in enumerate(qs):
     for i in range(0, n_lags):
-      time_ta = lags[i] * timestep
+      time_ta = lags[i] * timestep * tbsave
       s4i = s4[stype.value][i][qindex]
       # Print stype, t_a, q value, x, y, and z averages, number of
       # frame sets contributing to such average, and frame difference
