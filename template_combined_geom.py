@@ -7,7 +7,8 @@ import enum
 
 def usage():
   print("Arguments:",
-        "-n Number of files",
+        "-m Number of files",
+        "-c Number of frames in trajectory offset cycle of files",
         "-s Frame number to start on (index starts at 1)",
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
@@ -15,24 +16,20 @@ def usage():
         "-o Start index (from 1) of particles to limit analysis to"
         "-p End index (from 1) of particles to limit analysis to",
         "-h Print usage",
-        "Interval increase progression (last specified is used):",
-        "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
-        "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is geometric base)",
+        "-g Number of frames in geometric sequence (may be less due to rounding)",
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:o:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "m:c:s:d:a:q:o:p:hg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
   sys.exit(1)
 
-class progtypes(enum.Enum):
-  flenner = 1
-  geometric = 2
-
 # Total number of trajectory files
 n_files = 1
+# Length in frames of cycle of offsets
+set_len = None
 # What frame number to start on
 start = 0
 # Difference between frame pair starts
@@ -46,15 +43,18 @@ q = 7.25
 limit_particles = False
 upper_limit = None
 lower_limit = None
-# Type of progression to increase time interval by
-progtype = progtypes.flenner
+# Number of final times to use per initial time, used in geometric
+# sequence
+geom_num = None
 
 for o, a in opts:
   if o == "-h":
     usage()
     sys.exit(0)
-  elif o == "-n":
+  elif o == "-m":
     n_files = int(a)
+  elif o == "-c":
+    set_len = int(a)
   elif o == "-s":
     start = int(a) - 1
   elif o == "-d":
@@ -69,11 +69,14 @@ for o, a in opts:
   elif o == "-p":
     limit_particles = True
     upper_limit = int(a)
-  elif o == "-f":
-    progtype = progtypes.flenner
   elif o == "-g":
-    progtype = progtypes.geometric
-    geom_base = float(a)
+    geom_num = float(a)
+
+if set_len == None:
+  raise RuntimeError("Must specify a set length")
+
+if geom_num == None:
+  raise RuntimeError("Must specify number of elements in geometric sampling sequence")
 
 # Holds number of frames per file
 fileframes = np.empty(n_files + 1, dtype=int)
@@ -85,7 +88,7 @@ dcdfiles = list()
 for i in range(0, n_files):
   # The file object can be discarded after converting it to a dcd_file,
   # as the dcd_file duplicates the underlying file descriptor.
-  file = open("traj%d.dcd" %(i + 1), "r")
+  file = open("short%d.dcd" %(i + 1), "r")
   dcdfiles.append(pydcd.dcdfile(file))
   file.close()
 
@@ -139,40 +142,66 @@ n_frames = total_frames - start
 # Largest possible offset between samples
 max_offset = n_frames - 1
 
-if progtype == progtypes.flenner:
-  # Construct list of frame difference numbers for sampling according
-  # to a method of increasing spacing
-  magnitude = -1
-  frames_beyond_magnitude = max_offset
-  while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
-    magnitude += 1
-    frames_beyond_magnitude -= 50 * 5**magnitude
+# Ensure frame set is long enough to work with chosen cycle
+if n_frames < 2 * set_len:
+  raise RuntimeError("Trajectory set not long enough for averaging "
+                     "cycle, one may use non-averaging script instead.")
 
-  samples_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
+# Cycle of offset times
+samp_cycle = np.empty(set_len, dtype=int)
+which_file = np.searchsorted(fileframes, start, side="right") - 1
+offset = start - fileframes[which_file]
+t1 = dcdfiles[which_file].itstart + offset * timestep * tbsave
+for i in range(0, set_len):
+  t0 = t1
+  which_file = np.searchsorted(fileframes, start + i, side="right") - 1
+  offset = start + i - fileframes[which_file]
+  t1 = dcdfiles[which_file].itstart + offset * timestep * tbsave
 
-  n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
+  # Store differences in iteration increments
+  samp_cycle[i] = t1 - t0
 
-  # Allocate that array
-  samples = np.empty(n_samples, dtype=int)
+# Total offset of full cycle
+samp_sum = np.sum(samp_cycle)
 
-  # Efficiently fill the array
-  samples[0] = 0
-  last_sample_number = 0
-  for i in range(0, magnitude + 1):
-    samples[1 + 50 * i : 1 + 50 * (i + 1)] = last_sample_number + np.arange(5**i , 51 * 5**i, 5**i)
-    last_sample_number += 50 * 5**i
-  samples[1 + 50 * (magnitude + 1) : n_samples] = last_sample_number + np.arange(5**(magnitude + 1), (samples_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
+# Verify that timesteps do indeed follow cycle
+for i in range(0, n_frames):
+  which_file = np.searchsorted(fileframes, start + i, side="right") - 1
+  offset = start + i - fileframes[which_file]
+  t = dcdfiles[which_file].itstart + offset * timestep * tbsave
 
-elif progtype == progtypes.geometric:
-  # Largest power of geom_base that will be able to be sampled
-  end_power = math.floor(math.log(max_offset, geom_base))
+  if t != samp_cycle[i % set_len] + (i // set_len) * samp_sum:
+    raise RuntimeError("Frame %d in file %d does not seem to follow "
+                       "specified cycle." %(offset, which_file + 1))
 
-  # Create array of sample numbers following geometric progression,
-  # with flooring to have samples adhere to integer boundaries,
-  # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
+# Shift array to put smallest step first in sequence
+shift_index = np.argmin(samp_cycle)
+start += shift_index
+n_frames -= shift_index
+samp_cycle = np.roll(samp_cycle, -shift_index)
 
-  n_samples = samples.size
+# Holds frame number offsets from initial time to sample
+samples = np.empty(geom_num, dtype=int)
+
+# Create sample array to approximate geometric sequence
+for i in range(0, geom_num):
+  # Geometric sequence value to find closest sample value to
+  target = geom_base**(i + 1)
+
+  # Array of cycled values adjusted to range that will contain target
+  adjusted_array = samp_sum * (target // samp_sum) + samp_cycle
+
+  # Calculate logarithmically closest sample, clamping to allowed
+  # values
+  samples[i] = min(1, max(n_frames - 1, set_len * (target // samp_sum) + np.argmin(np.absolute(np.log(adjusted_array) - math.log(target)))))
+
+# Eliminate duplicate samples and prepend 0
+samples = np.insert(np.unique(samples), 0, 0)
+
+# Maximum number of samples per initial time. Likely less samples used
+# for most initial times due to limited remaining space in trajectory
+# set for offset
+n_samples = samples.size
 
 # If particles limited, must be read into different array
 if limit_particles == True:
@@ -221,7 +250,7 @@ for i in range(0, n_frames):
   cm[i][2] = np.mean(z0)
 
 # Iterate over starting points for functions
-for i in np.arange(0, n_frames, framediff):
+for i in np.arange(0, n_frames, set_len):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
   if limit_particles == True:
@@ -280,16 +309,18 @@ print("#a = %f" %radius)
 # averages over each pair of frames
 fc /= norm.reshape((n_samples, 1))
 
-# Normalize the overlap, thereby obtaining an average over each pair of frames
+# Normalize the overlap, thereby obtaining an average over each pair of
+# frames
 overlap /= norm
 
-# Normalize the msd, thereby obtaining an average over each pair of frames
+# Normalize the msd, thereby obtaining an average over each pair of
+# frames
 msd /= norm
 
 for i in range(0, n_samples):
-  time = samples[i] * timestep * tbsave
+  time = ((samples[i]//set_len) * samp_sum + samp_cycle[samples[i]%set_len]) * timestep * tbsave
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, average of directional scattering
   # function number of frame sets contributing to such averages, and
   # frame difference
-  print("%f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], samples[i]))
+  print("%f %f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], samples[i]))
