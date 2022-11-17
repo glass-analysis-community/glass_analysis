@@ -10,17 +10,16 @@ def usage():
         "-m Number of files",
         "-c Number of frames in trajectory offset cycle of files",
         "-s Frame number to start on (index starts at 1)",
-        "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
-        "-o Start index (from 1) of particles to limit analysis to"
+        "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
         "-h Print usage",
         "-g Number of frames in geometric sequence (may be less due to rounding)",
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "m:c:s:d:a:q:o:p:hg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "m:c:s:a:q:o:p:hg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -32,8 +31,6 @@ n_files = 1
 set_len = None
 # What frame number to start on
 start = 0
-# Difference between frame pair starts
-framediff = 10
 # Overlap radius for theta function
 radius = 0.25
 # Scattering vector constant
@@ -57,8 +54,6 @@ for o, a in opts:
     set_len = int(a)
   elif o == "-s":
     start = int(a) - 1
-  elif o == "-d":
-    framediff = int(a)
   elif o == "-a":
     radius = float(a)
   elif o == "-q":
@@ -70,7 +65,7 @@ for o, a in opts:
     limit_particles = True
     upper_limit = int(a)
   elif o == "-g":
-    geom_num = float(a)
+    geom_num = int(a)
 
 if set_len == None:
   raise RuntimeError("Must specify a set length")
@@ -100,14 +95,11 @@ for i in range(0, n_files):
     fparticles = dcdfiles[i].N
 
     timestep = dcdfiles[i].timestep
-    tbsave = dcdfiles[i].tbsave
   else:
     if dcdfiles[i].N != fparticles:
       raise RuntimeError("Not the same number of particles in each file")
     if dcdfiles[i].timestep != timestep:
       raise RuntimeError("Not the same time step in each file")
-    if dcdfiles[i].tbsave != tbsave:
-      raise RuntimeError("Not the same frame difference between saves in each file")
 
   fileframes[i + 1] = dcdfiles[i].nset
   total_frames += dcdfiles[i].nset
@@ -134,7 +126,6 @@ fileframes = np.cumsum(fileframes)
 print("#nset: %d" %total_frames)
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
-print("#tbsave: %f" %tbsave)
 
 # Number of frames to analyze
 n_frames = total_frames - start
@@ -151,12 +142,12 @@ if n_frames < 2 * set_len:
 samp_cycle = np.empty(set_len, dtype=int)
 which_file = np.searchsorted(fileframes, start, side="right") - 1
 offset = start - fileframes[which_file]
-t1 = dcdfiles[which_file].itstart + offset * timestep * tbsave
+t1 = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
 for i in range(0, set_len):
   t0 = t1
-  which_file = np.searchsorted(fileframes, start + i, side="right") - 1
-  offset = start + i - fileframes[which_file]
-  t1 = dcdfiles[which_file].itstart + offset * timestep * tbsave
+  which_file = np.searchsorted(fileframes, start + i + 1, side="right") - 1
+  offset = start + i + 1 - fileframes[which_file]
+  t1 = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
 
   # Store differences in iteration increments
   samp_cycle[i] = t1 - t0
@@ -164,13 +155,21 @@ for i in range(0, set_len):
 # Total offset of full cycle
 samp_sum = np.sum(samp_cycle)
 
+# Get time of frame 0
+which_file = np.searchsorted(fileframes, start, side="right") - 1
+offset = start - fileframes[which_file]
+zero_time = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
+
+# Cumulative sum of sample cycle
+samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
+
 # Verify that timesteps do indeed follow cycle
 for i in range(0, n_frames):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
-  t = dcdfiles[which_file].itstart + offset * timestep * tbsave
+  t = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
 
-  if t != samp_cycle[i % set_len] + (i // set_len) * samp_sum:
+  if t != samp_cycle_sum[i % set_len] + (i // set_len) * samp_sum + zero_time:
     raise RuntimeError("Frame %d in file %d does not seem to follow "
                        "specified cycle." %(offset, which_file + 1))
 
@@ -179,23 +178,30 @@ shift_index = np.argmin(samp_cycle)
 start += shift_index
 n_frames -= shift_index
 samp_cycle = np.roll(samp_cycle, -shift_index)
+samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
 
 # Holds frame number offsets from initial time to sample
 samples = np.empty(geom_num, dtype=int)
+
+# Base to use for geometric sequence to approximately fit full sample size
+geom_base = (samp_cycle_sum[(n_frames - 1) % set_len] + ((n_frames - 1) // set_len) * samp_sum)**(1 / geom_num)
 
 # Create sample array to approximate geometric sequence
 for i in range(0, geom_num):
   # Geometric sequence value to find closest sample value to
   target = geom_base**(i + 1)
 
-  # Array of cycled values adjusted to range that will contain target
-  adjusted_array = samp_sum * (target // samp_sum) + samp_cycle
+  # Array of cycled values adjusted to range that will contain target,
+  # taking advantage of the fact that the samp_cycle_sum array includes
+  # a representation of the smallest value of the next sequence.
+  # Clamp values to minimum of 1 so that logarithm will work correctly.
+  adjusted_array = np.maximum(1, samp_sum * (target // samp_sum) + samp_cycle_sum)
 
   # Calculate logarithmically closest sample, clamping to allowed
   # values
-  samples[i] = min(1, max(n_frames - 1, set_len * (target // samp_sum) + np.argmin(np.absolute(np.log(adjusted_array) - math.log(target)))))
+  samples[i] = min(n_frames - 1, max(1, set_len * (target // samp_sum) + np.argmin(np.absolute(np.log(adjusted_array) - math.log(target)))))
 
-# Eliminate duplicate samples and prepend 0
+# Eliminate duplicate samples and prepend 0 for 0-length interval
 samples = np.insert(np.unique(samples), 0, 0)
 
 # Maximum number of samples per initial time. Likely less samples used
@@ -301,7 +307,6 @@ for i in np.arange(0, n_frames, set_len):
 
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
 
-print("#dt = %f" %framediff)
 print("#q = %f" %q)
 print("#a = %f" %radius)
 
@@ -318,7 +323,7 @@ overlap /= norm
 msd /= norm
 
 for i in range(0, n_samples):
-  time = ((samples[i]//set_len) * samp_sum + samp_cycle[samples[i]%set_len]) * timestep * tbsave
+  time = (samples[i]//set_len) * samp_sum + samp_cycle_sum[samples[i]%set_len]
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, average of directional scattering
   # function number of frame sets contributing to such averages, and
