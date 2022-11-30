@@ -292,4 +292,4 @@ for i in range(0, n_samples):
   # scattering function averages, average of directional scattering
   # function number of frame sets contributing to such averages, and
   # frame difference
-  print("%f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], samples[i]))
+  print("%f %f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], samples[i]))
