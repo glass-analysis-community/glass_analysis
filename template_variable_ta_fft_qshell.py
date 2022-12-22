@@ -8,7 +8,7 @@ import enum
 
 def usage():
   print("Arguments:",
-        "-n Number of files",
+        "-n Number of files in each run",
         "-r Number of runs, numbered as folders",
         "-s Frame number to start on (index starts at 1)",
         "-d Spacing between initial times as well as lag values (dt)",
@@ -17,6 +17,10 @@ def usage():
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
         "-p Limit number of particles to analyze",
+        "-o Upper boundary for first q region with distinct q values (integer to multiply minimum q value)",
+        "-v Upper boundary for second q region divided into onion shells (integer to multiply minimum q value)",
+        "-l Number of onion shells to use in second q region",
+        "-f Write output to files, one for each lag time",
         "-h Print usage",
         "w function types (last specified is used, must be specified):",
         "-t Theta function threshold (argument is threshold radius)",
@@ -25,7 +29,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:b:c:p:jht:u:e:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:b:c:p:o:v:l:fjht:u:e:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -67,6 +71,14 @@ tb = 1
 tc = 0
 # Number of particles to limit analysis to
 particle_limit = None
+# Upper boundary for first q region
+qb1 = None
+# Upper boundary for second q region
+qb2 = None
+# Number of onion shells for second region
+shells = None
+# Whether to write output to files rather than stdout
+dumpfiles = False
 # Type of w function to use
 wtype = None
 
@@ -92,6 +104,14 @@ for o, a in opts:
     tc = int(a)
   elif o == "-p":
     particle_limit = int(a)
+  elif o == "-o":
+    qb1 = int(a)
+  elif o == "-v":
+    qb2 = int(a)
+  elif o == "-l":
+    shells = int(a)
+  elif o == "-f":
+    dumpfiles = True
   elif o == "-j":
     print("-j is default, no need to specify", file=sys.stderr)
   elif o == "-t":
@@ -116,8 +136,17 @@ if n_runs <= 1:
 if size_fft == None:
   raise RuntimeError("Must specify size for FFT matrix")
 
+if qb1 == None:
+  raise RuntimeError("Must specify upper q boundary for first region")
+
+if qb2 == None:
+  raise RuntimeError("Must specify upper q boundary for second region")
+
+if shells == None:
+  raise RuntimeError("Must specify number of onion shells in second region")
+
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -224,27 +253,27 @@ y2 = np.empty(particles, dtype=np.single)
 z2 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = [np.empty((n_init, n_ttypes, 3), dtype=float)] * n_runs
+cm = [np.empty((n_init, n_ttypes, 3), dtype=np.float64)] * n_runs
 
 # Bins for total calculation. Bounds of frame numbers extend beyond
 # what is required for storage in order for autocorrelation calculation
 # to work correctly and not wrap improperly.
-a_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=float)
-b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=float)
-self_bins = np.empty((size_fft, size_fft, size_fft), dtype=float)
+a_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float64)
+b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float64)
+self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
 # Accumulator of summed w values for each frame, used for computing
 # second 0 vector term of s4 (term_0_2).
-a_accum = np.zeros(2 * n_init - 1, dtype=float)
-b_accum = np.zeros(2 * n_init - 1, dtype=float)
+a_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
+b_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
 
 # Accumulates squared values of structure factor component across runs.
-ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=float)
+ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Structure factor variance for each difference in times. The second
 # and third fft dimensions hold values for negative vectors. Since all
 # inputs are real, this is not required for the first fft dimension.
-s4 = np.zeros((n_stypes, n_lags, size_fft, size_fft, (size_fft // 2) + 1), dtype=float)
+s4 = np.zeros((n_stypes, n_lags, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Normalization factor for structure factor variance indices
 norm = np.zeros(n_lags, dtype=np.int64)
@@ -252,9 +281,9 @@ norm = np.zeros(n_lags, dtype=np.int64)
 # W function values for each particle and for both initial and end
 # values
 if wtype == wtypes.theta:
-  w = np.empty((2, particles), dtype=int)
+  w = np.empty((2, particles), dtype=np.int64)
 else:
-  w = np.empty((2, particles), dtype=float)
+  w = np.empty((2, particles), dtype=np.float64)
 
 # Find center of mass of each frame
 tlist = ((ttypes.t1.value, 0),
@@ -498,13 +527,99 @@ s4[stypes.distinct.value] = s4[stypes.total.value] - s4[stypes.self.value]
 # each pair of frames
 s4 /= norm.reshape((n_lags, 1, 1, 1))
 
+# Shell width
+swidth = (qb2 - qb1) / shells
+
+# List of q values to use, first region is for shell intervals, second,
+# to be appended, is for specific q values. First region does not
+# contain actual q values, as intervals are calculated later
+qlist = [None] * shells
+
+# Norm for number of FFT matrix elements corresponding to each element
+# of qlist
+qnorm = [0] * shells
+
+# Array of indices in qlist matrix elements correspond to
+element_qs = np.empty((2*qb2 + 1, 2*qb2 + 1, qb2 + 1), dtype=np.int64)
+
+# Default is no corresponding index, with -1
+element_qs[:][:][:] = -1
+
+for i in range(-qb2, qb2 + 1):
+  for j in range(-qb2, qb2 + 1):
+    for k in range(0, qb2 + 1):
+      hyp = float(np.linalg.norm((i, j, k)))
+      if hyp > qb1:
+        # Index of onion shell that would include given q
+        shell_index = shells - int((qb2 - hyp) // swidth) - 1
+        if shell_index < shells:
+          element_qs[i + qb2][j + qb2][k] = shell_index
+          qnorm[shell_index] += 1
+      else:
+        if not (hyp in qlist):
+          qlist.append(hyp)
+          qnorm.append(0)
+        element_qs[i + qb2][j + qb2][k] = qlist.index(hyp)
+        qnorm[qlist.index(hyp)] += 1
+
+# Accumulated values of S4 for each q value. First dimension
+# corresponds to S4 type
+q_accum = np.empty((3, len(qlist)), dtype=np.float64)
+
+# Copy of qlist and qnorm for sorting
+qlistsorted = list(qlist)
+qnormsorted = list(qnorm)
+qlistsorted[shells:], qnormsorted[shells:] = zip(*sorted(zip(qlist[shells:], qnorm[shells:])))
+
 for i in range(0, n_lags):
-  for j in range(0, size_fft):
-    for k in range(0, size_fft):
-      for l in range(0, (size_fft // 2) + 1):
-        time_ta = lags[i] * timestep * tbsave
-        # Print t_a, x, y, and z components of fft frequency, total,
-        # self, and distinct averages, number of frame sets
-        # contributing to such average, and frame difference
-        # corresponding to t_a
-        print("%f %f %f %f %f %f %f %d %d" %(time_ta, (j-size_fft//2)/box_size, (k-size_fft//2)/box_size, l/box_size, s4[stypes.total.value][i][j][k][l], s4[stypes.self.value][i][j][k][l], s4[stypes.distinct.value][i][j][k][l], norm[i], lags[i]))
+  time_ta = lags[i] * timestep * tbsave
+
+  # File to write data for time to
+  if dumpfiles == True:
+    file = open("lag_%f" %(lags[i]), "w")
+  else:
+    file = sys.stdout
+
+  # Clear accumulator
+  q_accum[:][:] = 0.0
+
+  for j in range(-qb2, qb2 + 1):
+    for k in range(-qb2, qb2 + 1):
+      for l in range(0, qb2 + 1):
+        # Index of qlist we are to use
+        qcurrent = element_qs[j + qb2][k + qb2][l]
+
+        # If matrix element corresponds to used q value in qlist
+        if qcurrent != -1:
+          # Accumulate values to corresponding q value
+          q_accum[stypes.total.value][qcurrent] += s4[stypes.total.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
+          q_accum[stypes.self.value][qcurrent] += s4[stypes.self.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
+          q_accum[stypes.distinct.value][qcurrent] += s4[stypes.distinct.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
+
+  # Normalize q values for number of contributing elements
+  q_accum[:] /= qnorm
+
+  # Sort individual-q segement of qlist and q_accum according to qlist
+  # value
+  qlistsorted[shells:], q_accum[stypes.total.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.total.value][shells:])))
+  qlistsorted[shells:], q_accum[stypes.self.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.self.value][shells:])))
+  qlistsorted[shells:], q_accum[stypes.distinct.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.distinct.value][shells:])))
+
+  # For each distinct q value, print t_a, q value, number of FFT matrix
+  # elements contributing to q value, total, self, and distinct
+  # averages, number of frame sets contributing to such average, and
+  # frame difference corresponding to t_a
+  for j in range(shells, len(qlistsorted)):
+    file.write("%f %f %d %f %f %f %d %d\n" %(time_ta, qlistsorted[j]/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], norm[i], lags[i]))
+
+  # For each shell, print t_a, midpoint of q value range of fft
+  # frequency, number of FFT matrix elements contributing to q value,
+  # total, self, and distinct averages, number of frame sets
+  # contributing to such average, and frame difference corresponding to
+  # t_a
+  for j in range(0, shells):
+    file.write("%f %f %d %f %f %f %d %d\n" %(time_ta, (qb1+(j+0.5)*swidth)/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], norm[i], lags[i]))
+
+  # Close file if opened
+  if dumpfiles == True:
+    file.close()
