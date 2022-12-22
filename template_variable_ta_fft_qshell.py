@@ -105,9 +105,9 @@ for o, a in opts:
   elif o == "-p":
     particle_limit = int(a)
   elif o == "-o":
-    qb1 = int(a)
+    qb1 = float(a)
   elif o == "-v":
-    qb2 = int(a)
+    qb2 = float(a)
   elif o == "-l":
     shells = int(a)
   elif o == "-f":
@@ -377,13 +377,13 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
                     (ya1 - ya0)**2 +
                     (za1 - za0)**2)/sscale, out=wa)
 
-# Total S4 calcuation
-
-print("Calculating total part of S4", file=sys.stderr)
+# S4 calcuation
 
 # Iterate over runs (FFT will be averaged over runs)
 for i in range(0, n_runs):
   for j in range(0, n_init):
+    # Total S4 calculation, uses FFT-based autocorrelation
+
     root = framediff * j
 
     if root + tb - tc < n_frames:
@@ -404,19 +404,60 @@ for i in range(0, n_runs):
 
     if root - tc >= 0 and root + tb < n_frames:
       # Calculate w values for t3 and t4
-      calculate_w(w[0], i, x0, y0, z0, x2, y2, z2, j, ttypes.t3, ttypes.t4)
+      calculate_w(w[1], i, x1, y1, z1, x2, y2, z2, j, ttypes.t3, ttypes.t4)
 
       # Wrap particle coordinates to box. If not done, particles will
       # not be distributed across bins correctly.
-      x0 %= box_size
-      y0 %= box_size
-      z0 %= box_size
+      x1 %= box_size
+      y1 %= box_size
+      z1 %= box_size
 
       # Bin values for FFT
-      b_bins[j], dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
+      b_bins[j], dummy = np.histogramdd((x1, y1, z1), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
 
       # Accumulate for second term of variance
-      b_accum[j] += np.sum(w[0])
+      b_accum[j] += np.sum(w[1])
+
+    # Self S4 calculation, iterates over each possible interval end
+    # frame for current start frame
+
+    for index, ta in enumerate(lags):
+      if ta < (tc - root) or ta >= (n_frames - root - tb):
+        continue
+
+      # Calculate w values for t3 and t4 (again for each interval end)
+      calculate_w(w[1], i, x1, y1, z1, x2, y2, z2, j + ta // framediff, ttypes.t3, ttypes.t4)
+
+      # Align particle coordinates to make sum equivalent to total
+      # part and find difference in positions for binning. Since total
+      # exponential is negative, must use reverse difference with
+      # positive-exponential FFT.
+      x1[:] = ((x0 // cell) - (x1 // cell) + 0.5) * cell
+      y1[:] = ((y0 // cell) - (y1 // cell) + 0.5) * cell
+      z1[:] = ((z0 // cell) - (z1 // cell) + 0.5) * cell
+
+      # Wrap particle coordinates to box. If not done, particles will
+      # not be distributed across bins correctly.
+      x1 %= box_size
+      y1 %= box_size
+      z1 %= box_size
+
+      # Multiply w values for calculation of pairs
+      w[1] *= w[0]
+
+      # Bin multiplied w values according to coordinate differences
+      self_bins, dummy = np.histogramdd((x1, y1, z1), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+
+      # Calculate the variance for the current index and add it to the
+      # accumulator entry corresponding to the value of t_a
+      s4[stypes.self.value][index] += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / particles
+
+      # Accumulate the normalization value for this lag value, which
+      # we will use later in computing the mean value for each t_b
+      if i == 0:
+        norm[index] += 1
+
+    print("Processed frame %d in run %d" %(start + root + 1, i + 1), file=sys.stderr)
 
   # Calculate correlations of first point sums with second point sums.
   # This will later be normalized for number of terms corresponding to
@@ -430,6 +471,7 @@ for i in range(0, n_runs):
 
 # Normalize total S4 values across runs
 s4[stypes.total.value] /= n_runs
+s4[stypes.self.value] /= n_runs
 
 # Normalize second term of variance across runs
 a_accum /= n_runs
@@ -439,67 +481,6 @@ b_accum /= n_runs
 # later be normalized for number of terms corresponding to each
 # correlation offset. a_accum must be conjugated for the correlation.
 term_0_2 = fft.fftshift(fft.irfft(np.conjugate(fft.rfft(a_accum)) * fft.rfft(b_accum), n=a_accum.size).real)[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles
-
-# Self S4 calculation
-
-print("Calculating self part of S4", file=sys.stderr)
-
-# Iterate over starting points for structure factor
-for i in range(0, n_init):
-  # Iterate over ending points for structure factor and add to
-  # accumulated structure factor, making sure to only use indices
-  # which are within the range of the files.
-  for index, ta in enumerate(lags):
-    if ta < (tc - framediff * i) or ta >= (n_frames - framediff * i - tb):
-      continue
-
-    # Clear run accumulators.
-    ab_accum[:] = 0.0
-
-    # Iterate over files
-    for k in range(0, n_runs):
-      # Calculate w values for t3 and t4
-      calculate_w(w[0], k, x0, y0, z0, x2, y2, z2, i, ttypes.t1, ttypes.t2)
-
-      # Calculate w values for t1 and t2
-      calculate_w(w[1], k, x1, y1, z1, x2, y2, z2, i + ta // framediff, ttypes.t3, ttypes.t4)
-
-      # Align particle coordinates to make sum equivalent to total
-      # part and find difference in positions for binning. Since total
-      # exponential is negative, must use reverse difference with
-      # positive-exponential FFT.
-      x0[:] = ((x0 // cell) - (x1 // cell) + 0.5) * cell
-      y0[:] = ((y0 // cell) - (y1 // cell) + 0.5) * cell
-      z0[:] = ((z0 // cell) - (z1 // cell) + 0.5) * cell
-
-      # Wrap particle coordinates to box. If not done, particles will
-      # not be distributed across bins correctly.
-      x0 %= box_size
-      y0 %= box_size
-      z0 %= box_size
-
-      # Multiply w values for calculation of pairs
-      w[0] *= w[1]
-
-      # Bin multiplied w values according to coordinate differences
-      self_bins, dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
-
-      # Accumulate S4 FFT
-      ab_accum += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1))
-
-    # Normalize accumulators by number of runs to obtain expectation
-    # values
-    ab_accum /= n_runs
-
-    # Calculate the variance for the current index and add it to the
-    # accumulator entry corresponding to the value of t_a
-    s4[stypes.self.value][index] += ab_accum / particles
-
-    # Accumulate the normalization value for this lag value, which
-    # we will use later in computing the mean value for each t_b
-    norm[index] += 1
-
-  print("Processed frame %d" %(start + framediff * i + 1), file=sys.stderr)
 
 # Subtract second term of variance from 0 vector terms
 s4[stypes.total.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2
@@ -527,6 +508,10 @@ s4[stypes.distinct.value] = s4[stypes.total.value] - s4[stypes.self.value]
 # each pair of frames
 s4 /= norm.reshape((n_lags, 1, 1, 1))
 
+# Upper boundary for onion shells rounded towards zero, used for matrix
+# dimensioning
+qb2i = int(qb2)
+
 # Shell width
 swidth = (qb2 - qb1) / shells
 
@@ -540,26 +525,26 @@ qlist = [None] * shells
 qnorm = [0] * shells
 
 # Array of indices in qlist matrix elements correspond to
-element_qs = np.empty((2*qb2 + 1, 2*qb2 + 1, qb2 + 1), dtype=np.int64)
+element_qs = np.empty((2*qb2i + 1, 2*qb2i + 1, qb2i + 1), dtype=np.int64)
 
 # Default is no corresponding index, with -1
 element_qs[:][:][:] = -1
 
-for i in range(-qb2, qb2 + 1):
-  for j in range(-qb2, qb2 + 1):
-    for k in range(0, qb2 + 1):
+for i in range(-qb2i, qb2i + 1):
+  for j in range(-qb2i, qb2i + 1):
+    for k in range(0, qb2i + 1):
       hyp = float(np.linalg.norm((i, j, k)))
       if hyp > qb1:
         # Index of onion shell that would include given q
         shell_index = shells - int((qb2 - hyp) // swidth) - 1
         if shell_index < shells:
-          element_qs[i + qb2][j + qb2][k] = shell_index
+          element_qs[i + qb2i][j + qb2i][k] = shell_index
           qnorm[shell_index] += 1
       else:
         if not (hyp in qlist):
           qlist.append(hyp)
           qnorm.append(0)
-        element_qs[i + qb2][j + qb2][k] = qlist.index(hyp)
+        element_qs[i + qb2i][j + qb2i][k] = qlist.index(hyp)
         qnorm[qlist.index(hyp)] += 1
 
 # Accumulated values of S4 for each q value. First dimension
@@ -583,11 +568,11 @@ for i in range(0, n_lags):
   # Clear accumulator
   q_accum[:][:] = 0.0
 
-  for j in range(-qb2, qb2 + 1):
-    for k in range(-qb2, qb2 + 1):
-      for l in range(0, qb2 + 1):
+  for j in range(-qb2i, qb2i + 1):
+    for k in range(-qb2i, qb2i + 1):
+      for l in range(0, qb2i + 1):
         # Index of qlist we are to use
-        qcurrent = element_qs[j + qb2][k + qb2][l]
+        qcurrent = element_qs[j + qb2i][k + qb2i][l]
 
         # If matrix element corresponds to used q value in qlist
         if qcurrent != -1:
