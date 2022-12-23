@@ -51,6 +51,9 @@ class stypes(enum.Enum):
   total = 0
   self = 1
   distinct = 2
+  totalstd = 3
+  selfstd = 4
+  distinctstd = 5
 n_stypes = len(stypes)
 
 # Total number of trajectory files
@@ -270,6 +273,10 @@ b_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
 # Accumulates squared values of structure factor component across runs.
 ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
+# Temporary value for each run to allow for calculation of each run's
+# distinct component of s4
+run_self_s4 = np.empty((n_lags, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
+
 # Structure factor variance for each difference in times. The second
 # and third fft dimensions hold values for negative vectors. Since all
 # inputs are real, this is not required for the first fft dimension.
@@ -381,10 +388,12 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
 
 # Iterate over runs (FFT will be averaged over runs)
 for i in range(0, n_runs):
+  # Clear self accumulator
+  run_self_s4[:,:,:,:] = 0.0
   for j in range(0, n_init):
-    # Total S4 calculation, uses FFT-based autocorrelation
-
     root = framediff * j
+
+    # Total S4 calculation, uses FFT-based autocorrelation
 
     if root + tb - tc < n_frames:
       # Calculate w values for t1 and t2
@@ -448,9 +457,8 @@ for i in range(0, n_runs):
       # Bin multiplied w values according to coordinate differences
       self_bins, dummy = np.histogramdd((x1, y1, z1), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
 
-      # Calculate the variance for the current index and add it to the
-      # accumulator entry corresponding to the value of t_a
-      s4[stypes.self.value][index] += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / particles
+      # Calculate the variance for the current index
+      run_self_s4[index] += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / particles
 
       # Accumulate the normalization value for this lag value, which
       # we will use later in computing the mean value for each t_b
@@ -467,11 +475,34 @@ for i in range(0, n_runs):
   # FFT of a_bins must be conjugated for the time dimension only. The
   # roll followed by flip unconjugates the time axis of b_bins and
   # conjugates the time axis of a_bins.
-  s4[stypes.total.value] += fft.fftshift(fft.ifft(np.flip(np.roll(fft.rfftn(a_bins) * np.conjugate(fft.rfftn(b_bins)), -1, axis=0), axis=0), axis=0).real, axes=(0, 1, 2))[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles
+  run_total_s4 = fft.fftshift(fft.ifft(np.flip(np.roll(fft.rfftn(a_bins) * np.conjugate(fft.rfftn(b_bins)), -1, axis=0), axis=0), axis=0).real, axes=(0, 1, 2))[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles
 
-# Normalize total S4 values across runs
-s4[stypes.total.value] /= n_runs
-s4[stypes.self.value] /= n_runs
+  # Normalize the accumulated values, thereby obtaining averages over
+  # each pair of frames
+  run_total_s4 /= norm.reshape((n_lags, 1, 1, 1))
+  run_self_s4 /= norm.reshape((n_lags, 1, 1, 1))
+
+  # Calculate distinct part of S4 for current run
+  run_distinct_s4 = run_total_s4 - run_self_s4
+
+  # Accumulate total, self, and distinct averages for run
+  s4[stypes.total.value] += run_total_s4
+  s4[stypes.self.value] += run_self_s4
+  s4[stypes.distinct.value] += run_distinct_s4
+
+  # Accumulate squares of total, self, and distinct averages for run,
+  # holding variances for eventual calculation of standard deviation
+  s4[stypes.totalstd.value] += run_total_s4**2
+  s4[stypes.selfstd.value] += run_self_s4**2
+  s4[stypes.distinctstd.value] += run_distinct_s4**2
+
+# Normalize S4 values across runs
+s4 /= n_runs
+
+# Calculate standard deviations from normalized variances over runs
+s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
+s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
+s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
 
 # Normalize second term of variance across runs
 a_accum /= n_runs
@@ -480,11 +511,12 @@ b_accum /= n_runs
 # Used with 0 vector for calculating second term of variance. This will
 # later be normalized for number of terms corresponding to each
 # correlation offset. a_accum must be conjugated for the correlation.
-term_0_2 = fft.fftshift(fft.irfft(np.conjugate(fft.rfft(a_accum)) * fft.rfft(b_accum), n=a_accum.size).real)[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles
+term_0_2 = (fft.fftshift(fft.irfft(np.conjugate(fft.rfft(a_accum)) * fft.rfft(b_accum), n=a_accum.size).real)[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles) / norm
 
 # Subtract second term of variance from 0 vector terms
 s4[stypes.total.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2
 s4[stypes.self.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2 / particles
+s4[stypes.distinct.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2 * (particles - 1) / particles
 
 print("#dt = %d" %framediff)
 print("#t_b = %d" %tb)
@@ -499,14 +531,6 @@ elif wtype == wtypes.gauss:
 elif wtype == wtypes.exp:
   print("#w function type: Single Exponential")
   print("#a = %f" %sscale)
-
-# Find the distinct component of the variance by subtracting the self
-# part from the total.
-s4[stypes.distinct.value] = s4[stypes.total.value] - s4[stypes.self.value]
-
-# Normalize the accumulated values, thereby obtaining averages over
-# each pair of frames
-s4 /= norm.reshape((n_lags, 1, 1, 1))
 
 # Upper boundary for onion shells rounded towards zero, used for matrix
 # dimensioning
@@ -549,7 +573,7 @@ for i in range(-qb2i, qb2i + 1):
 
 # Accumulated values of S4 for each q value. First dimension
 # corresponds to S4 type
-q_accum = np.empty((3, len(qlist)), dtype=np.float64)
+q_accum = np.empty((n_stypes, len(qlist)), dtype=np.float64)
 
 # Copy of qlist and qnorm for sorting
 qlistsorted = list(qlist)
@@ -577,9 +601,7 @@ for i in range(0, n_lags):
         # If matrix element corresponds to used q value in qlist
         if qcurrent != -1:
           # Accumulate values to corresponding q value
-          q_accum[stypes.total.value][qcurrent] += s4[stypes.total.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
-          q_accum[stypes.self.value][qcurrent] += s4[stypes.self.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
-          q_accum[stypes.distinct.value][qcurrent] += s4[stypes.distinct.value][i][(size_fft//2)+j][(size_fft//2)+k][l]
+          q_accum[:, qcurrent] += s4[:, i, (size_fft//2)+j, (size_fft//2)+k, l]
 
   # Normalize q values for number of contributing elements
   q_accum[:] /= qnorm
@@ -589,21 +611,25 @@ for i in range(0, n_lags):
   qlistsorted[shells:], q_accum[stypes.total.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.total.value][shells:])))
   qlistsorted[shells:], q_accum[stypes.self.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.self.value][shells:])))
   qlistsorted[shells:], q_accum[stypes.distinct.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.distinct.value][shells:])))
+  qlistsorted[shells:], q_accum[stypes.totalstd.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.totalstd.value][shells:])))
+  qlistsorted[shells:], q_accum[stypes.selfstd.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.selfstd.value][shells:])))
+  qlistsorted[shells:], q_accum[stypes.distinctstd.value][shells:] = zip(*sorted(zip(qlist[shells:], q_accum[stypes.distinctstd.value][shells:])))
 
   # For each distinct q value, print t_a, q value, number of FFT matrix
   # elements contributing to q value, total, self, and distinct
-  # averages, number of frame sets contributing to such average, and
+  # averages, standard deviations of total, self, and distinct
+  # averages, number of frame sets contributing to such averages, and
   # frame difference corresponding to t_a
   for j in range(shells, len(qlistsorted)):
-    file.write("%f %f %d %f %f %f %d %d\n" %(time_ta, qlistsorted[j]/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], norm[i], lags[i]))
+    file.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta, qlistsorted[j]/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], q_accum[stypes.totalstd.value][j], q_accum[stypes.selfstd.value][j], q_accum[stypes.distinctstd.value][j], norm[i], lags[i]))
 
   # For each shell, print t_a, midpoint of q value range of fft
   # frequency, number of FFT matrix elements contributing to q value,
-  # total, self, and distinct averages, number of frame sets
-  # contributing to such average, and frame difference corresponding to
-  # t_a
+  # total, self, and distinct averages, standard deviations of total,
+  # self, and distinct averages, number of frame sets contributing to
+  # such averages, and frame difference corresponding to t_a
   for j in range(0, shells):
-    file.write("%f %f %d %f %f %f %d %d\n" %(time_ta, (qb1+(j+0.5)*swidth)/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], norm[i], lags[i]))
+    file.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta, (qb1+(j+0.5)*swidth)/box_size, qnormsorted[j], q_accum[stypes.total.value][j], q_accum[stypes.self.value][j], q_accum[stypes.distinct.value][j], q_accum[stypes.totalstd.value][j], q_accum[stypes.selfstd.value][j], q_accum[stypes.distinctstd.value][j], norm[i], lags[i]))
 
   # Close file if opened
   if dumpfiles == True:
