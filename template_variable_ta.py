@@ -165,7 +165,7 @@ for i in range(0, n_runs):
 
       if dcdfiles[i][j].N != particles:
         raise RuntimeError("Not the same number of particles in each file")
-      if dcdfiles[i][j].tbsave != timestep:
+      if dcdfiles[i][j].timestep != timestep:
         raise RuntimeError("Not the same time step in each file")
       if dcdfiles[i][j].tbsave != tbsave:
         raise RuntimeError("Not the same frame difference between saves in each file")
