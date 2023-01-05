@@ -4,6 +4,7 @@ import pydcd
 import sys
 import math
 import getopt
+import enum
 
 def usage():
   print("Arguments:",
@@ -12,10 +13,29 @@ def usage():
         "-f Number of frames in generated trajectory",
         "-d Initial particle density, over dcd file length units",
         "-h Print usage",
+        "Initial distribution of particle positions:",
+        "-g Evenly spaced cubic grid (default)",
+        "-o All particles at origin",
+        "-u Uniform random distribution within box",
+        "Linear momentum vector types (Effected by particle pairing):",
+        "-e No overall linear momentum, each particle has random trajectory without pairing (default)",
+        "-z Use zero vector for constant displacement",
+        "-i Use same distribution as single particle vectors for constant displacement",
+        "-n Use distribution of single particles divided by sqrt(n_particles) for constant displacement",
         sep="\n", file=sys.stderr)
 
+class initdist(enum.Enum):
+  grid = 1
+  origin = 2
+  uniform = 3
+
+class vectypes(enum.Enum):
+  zero = 1
+  dist = 2
+  narrowdist = 3
+
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "p:s:f:d:h")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "p:s:f:d:hgouezin")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -29,6 +49,10 @@ density = None
 sigma = None
 # Number of trajectory frames to generate
 n_frames = None
+# Behaviour to use for initial distribution of particle positions
+inittype = initdist.grid
+# Type of distribution to use for constant vector generation
+vectype = None
 
 for o, a in opts:
   if o == "-h":
@@ -42,6 +66,20 @@ for o, a in opts:
     n_frames = int(a)
   elif o == "-d":
     density = float(a)
+  elif o == "-g":
+    inittype = initdist.grid
+  elif o == "-o":
+    inittype = initdist.origin
+  elif o == "-u":
+    inittype = initdist.uniform
+  elif o == "-e":
+    vectype = None
+  elif o == "-z":
+    vectype = vectypes.zero
+  elif o == "-i":
+    vectype = vectypes.dist
+  elif o == "-n":
+    vectype = vectypes.narrowdist
 
 if n_particles == None:
   raise RuntimeError("Must specify number of particles")
@@ -59,19 +97,77 @@ traj_file = pydcd.create("traj1.dcd", n_particles**3, 0, 1, 1.0, 1)
 # particles
 L = (n_particles - 1) * density**(1/3)
 
-# Initialize positions of particles
-linarray = np.linspace(-L, L, num=n_particles)
-particles = np.meshgrid(linarray, linarray, linarray)
-x = particles[0].astype(np.single)
-y = particles[1].astype(np.single)
-z = particles[2].astype(np.single)
-
 # Initialize random number generation
 rng = np.random.default_rng()
 
+# Initialize positions of particles
+if inittype == initdist.grid:
+  linarray = np.linspace(-L, L, num=n_particles)
+  particles = np.meshgrid(linarray, linarray, linarray)
+  x = particles[0].astype(np.single)
+  y = particles[1].astype(np.single)
+  z = particles[2].astype(np.single)
+elif inittype == initdist.origin:
+  x = np.zeros((n_particles, n_particles, n_particles), dtype=np.single)
+  y = np.zeros((n_particles, n_particles, n_particles), dtype=np.single)
+  z = np.zeros((n_particles, n_particles, n_particles), dtype=np.single)
+elif inittype == initdist.uniform:
+  x = rng.uniform(-L, L, n_particles**3).reshape((n_particles, n_particles, n_particles)).astype(np.single)
+  y = rng.uniform(-L, L, n_particles**3).reshape((n_particles, n_particles, n_particles)).astype(np.single)
+  z = rng.uniform(-L, L, n_particles**3).reshape((n_particles, n_particles, n_particles)).astype(np.single)
+
+# Create linear momentum vector if needed
+if vectype == vectypes.zero:
+  lmx = 0.0
+  lmy = 0.0
+  lmz = 0.0
+elif vectype == vectypes.dist:
+  lmx = rng.normal(scale=sigma)
+  lmy = rng.normal(scale=sigma)
+  lmz = rng.normal(scale=sigma)
+elif vectype == vectypes.narrowdist:
+  lmx = rng.normal(scale=sigma / math.sqrt(n_particles**3))
+  lmy = rng.normal(scale=sigma / math.sqrt(n_particles**3))
+  lmz = rng.normal(scale=sigma / math.sqrt(n_particles**3))
+
+if vectype != None:
+  # Unshuffled differences
+  dx = np.empty(n_particles**3, dtype=np.single)
+  dy = np.empty(n_particles**3, dtype=np.single)
+  dz = np.empty(n_particles**3, dtype=np.single)
+
 # Generate and write frames
 for i in range(0, n_frames):
-  x += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
-  y += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
-  z += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+  if vectype == None:
+    # Generate and add random offsets
+    x += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+    y += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+    z += rng.normal(scale=sigma, size=(n_particles, n_particles, n_particles))
+  else:
+    # Generate paried random offsets
+    if n_particles % 2 == 1:
+      dx[:(n_particles**3 // 2) + 1] = rng.normal(scale=sigma, size=((n_particles**3 // 2) + 1))
+      dy[:(n_particles**3 // 2) + 1] = rng.normal(scale=sigma, size=((n_particles**3 // 2) + 1))
+      dz[:(n_particles**3 // 2) + 1] = rng.normal(scale=sigma, size=((n_particles**3 // 2) + 1))
+      dx[(n_particles**3 // 2) + 1:] = -dx[:n_particles**3 // 2]
+      dy[(n_particles**3 // 2) + 1:] = -dy[:n_particles**3 // 2]
+      dz[(n_particles**3 // 2) + 1:] = -dz[:n_particles**3 // 2]
+    else:
+      dx[:n_particles**3 // 2] = rng.normal(scale=sigma, size=(n_particles**3 // 2))
+      dy[:n_particles**3 // 2] = rng.normal(scale=sigma, size=(n_particles**3 // 2))
+      dz[:n_particles**3 // 2] = rng.normal(scale=sigma, size=(n_particles**3 // 2))
+      dx[n_particles**3 // 2:] = -dx[:n_particles**3 // 2]
+      dy[n_particles**3 // 2:] = -dy[:n_particles**3 // 2]
+      dz[n_particles**3 // 2:] = -dz[:n_particles**3 // 2]
+
+    # Add linear momentum vector
+    dx += lmx
+    dy += lmy
+    dz += lmz
+
+    # Shuffle and add random offsets
+    x += rng.permutation(dx).reshape((n_particles, n_particles, n_particles))
+    y += rng.permutation(dy).reshape((n_particles, n_particles, n_particles))
+    z += rng.permutation(dz).reshape((n_particles, n_particles, n_particles))
+
   traj_file.adcdp(x, y, z)
