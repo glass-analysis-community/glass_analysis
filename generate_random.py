@@ -95,14 +95,14 @@ traj_file = pydcd.create("traj1.dcd", n_particles**3, 0, 1, 1.0, 1)
 
 # Calculate half-extent of box for given density and number of
 # particles
-L = (n_particles - 1) * density**(1/3)
+L = n_particles * density**(1/3) / 2
 
 # Initialize random number generation
 rng = np.random.default_rng()
 
 # Initialize positions of particles
 if inittype == initdist.grid:
-  linarray = np.linspace(-L, L, num=n_particles)
+  linarray = np.linspace(-L * (n_particles - 1)/n_particles, L * (n_particles - 1)/n_particles, num=n_particles)
   particles = np.meshgrid(linarray, linarray, linarray)
   x = particles[0].astype(np.single)
   y = particles[1].astype(np.single)
