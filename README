@@ -1,0 +1,85 @@
+All scripts were developed to run with python 3.7. It may be loaded on OSC
+with:
+
+module load python/3.7-2019.10
+
+On OSC, this will have to be run for each session before running these scripts.
+
+Most scripts also require pydcd, which provides DCD file reading and writing
+fuctionality. On OSC, this can be installed with:
+
+pip install --user /fs/project/PHS0243/gm960420/wheels/py3.7/pydcd/0.0.3/pydcd-0.0.3-cp37-cp37m-linux_x86_64.whl
+
+This needs only be done once for each user. The installation is persistent
+across sessions.
+
+Scripts analyzing a single run are run from a directory with traj*.dcd files.
+Scripts analyzing multiple runs are run from a directory with run*/ folders,
+which in turn contain traj*.dcd files. Scripts may be run with the -h
+option in order to print documentation of their options.
+
+The scripts are:
+
+generate_random.py
+  Script for generating random DCD trajectories.
+
+metadata.py
+  Prints metadata/properties of each DCD file passed.
+
+template_combined.py
+  Calculates overlap, scattering functions, and mean squared displacement
+  over set of interval lengths for given trajectory, averaging over initial
+  times. Frames are assumed to be evenly spaced.
+
+template_combined_aging.py
+  Same as template_combined.py, but for first region of custom equilibriation
+  trajectories. In this region, the frames are not evenly spaced, instead
+  roughly following a geometric progression. Each frame has its own DCD file.
+
+template_combined_geom.py
+  Same as template_combined.py, but for second region of custom equilibriation
+  trajectories. In this region, the frames are not evenly spaced, instead
+  following a repeating uneven progression. Each frame has its own DCD file.
+
+template_combined_variance.py
+  Calculates the variance of overlap, scattering functions and mean squared
+  displacements between multiple equal-length trajectories.
+
+template_variable_ta2.py
+  Calculates S4 from multiple runs. This script calculates S4 for a
+  progression of values of t_a, which represents the lag between intervals
+  (((t_1 + t_2) - (t_3 + t_4)) / 2). This may be made to use a set of q
+  values, but is best used for calculating the static structure factor (q=0).
+
+template_variable_ta_fft.py
+  Calculates S4 from multiple runs. This script calculates S4 for a linear
+  sequence of values of t_a, which represents the lag between intervals
+  (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses both time and spatial
+  FFTs to accelerate calculation, especially for nonzero q values.
+
+template_variable_ta_fft_qshell.py
+  Calculates S4 from multiple runs. This script calculates S4 for a linear
+  sequence of values of t_a, which represents the lag between intervals
+  (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses both time and spatial
+  FFTs to accelerate calculation, especially for nonzero q values. Output
+  values for different q vectors are binned according to the magnitude of q,
+  with q magnitudes under a certain threshold being reported individually,
+  and q magnitudes above such threshold being binned into sets of onion shells
+  with a range of magnitudes.
+
+template_variable_tb.py
+  Calculates S4 from multiple runs. This script calculates S4 for a
+  progression of values of t_b, which represents the average interval
+  length (((t_2 - t_1) + (t_4 - t_3)) / 2). This may be made to use a set of
+  q  values, but is best used for calculating the static structure factor
+  (q=0).
+
+template_variable_tb_sfft_qshell.py
+  Calculates S4 from multiple runs. This script calculates S4 for a
+  progression of values of t_b, which represents the average interval
+  length (((t_2 - t_1) + (t_4 - t_3)) / 2). This script uses both spatial
+  FFTs to accelerate calculation, especially for nonzero q values.  Output
+  values for different q vectors are binned according to the magnitude of q,
+  with q magnitudes under a certain threshold being reported individually,
+  and q magnitudes above such threshold being binned into sets of onion shells
+  with a range of magnitudes.
