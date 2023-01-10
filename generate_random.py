@@ -95,7 +95,7 @@ traj_file = pydcd.create("traj1.dcd", n_particles**3, 0, 1, 1.0, 1)
 
 # Calculate half-extent of box for given density and number of
 # particles
-L = n_particles * density**(1/3) / 2
+L = n_particles * density**(-1/3) / 2
 
 # Initialize random number generation
 rng = np.random.default_rng()
