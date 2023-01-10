@@ -407,9 +407,6 @@ for i in range(0, n_runs):
   for j in range(0, n_init):
     root = framediff * j
 
-    if root < (tc - tb) or root - n_frames >= (tc - tb)):
-      continue
-
     # Total S4 calculation, uses FFT-based autocorrelation
 
     if root + tb - tc < n_frames:
@@ -448,7 +445,10 @@ for i in range(0, n_runs):
     # frame for current start frame
 
     for index, ta in enumerate(lags):
-      if ta < max(tc - root, -tb - root) or ta - n_frames >= min(tc - root, -tb - root):
+      if (ta < max(tc - root, -tb - root) or
+          ta - n_frames >= min(tc - root, -tb - root) or
+          root < (tc - tb) or
+          root - n_frames >= (tc - tb)):
         continue
 
       # Calculate w values for t3 and t4 (again for each interval end)
