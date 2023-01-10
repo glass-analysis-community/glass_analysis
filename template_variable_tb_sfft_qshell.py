@@ -298,11 +298,21 @@ x1 = np.empty(particles, dtype=np.single)
 y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
+# Coordinates wrapped to box size
+x0m = np.empty(particles, dtype=np.single)
+y0m = np.empty(particles, dtype=np.single)
+z0m = np.empty(particles, dtype=np.single)
+
 # Used when two separate intervals are used for covariance in S4
 if ta != 0 or tc != 0:
   x2 = np.empty(particles, dtype=np.single)
   y2 = np.empty(particles, dtype=np.single)
   z2 = np.empty(particles, dtype=np.single)
+
+  # Coordinates wrapped to box size
+  x2m = np.empty(particles, dtype=np.single)
+  y2m = np.empty(particles, dtype=np.single)
+  z2m = np.empty(particles, dtype=np.single)
 
 # Difference between particle positions at start of intervals, used
 # when interval start times are different
@@ -406,12 +416,6 @@ def get_frame(t0, xb0, yb0, zb0, run):
   yb0 -= cm[run][t0][1]
   zb0 -= cm[run][t0][2]
 
-  # Wrap particle coordinates to box. If not done, particles will not
-  # be distributed across FFT bins correctly.
-  xb0 %= box_size
-  yb0 %= box_size
-  zb0 %= box_size
-
 # Get end frame values and calculate w, do not modify start frame
 # values
 def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
@@ -442,27 +446,40 @@ for i in np.arange(0, n_runs):
 
   # Iterate over starting points for structure factor
   for j in np.arange(0, n_frames, framediff):
+    if ta < (tc - j) or ta - n_frames >= (tc - j):
+      continue
+
     # Get starting frame for first interval and store in x0, y0, z0
     get_frame(start + j, x0, y0, z0, i)
+
+    # Wrap coordinates to box size for binning
+    x0m[:] = x0 % box_size
+    y0m[:] = y0 % box_size
+    z0m[:] = z0 % box_size
 
     # If needed, get starting frame for second interval and store in
     # x2, y2, z2
     if ta - tc != 0:
-      get_frame(start + j, x2, y2, z2, i)
+      get_frame(start + j + ta - tc, x2, y2, z2, i)
+
+      # Wrap coordinates to box size for binning
+      x2m[:] = x2 % box_size
+      y2m[:] = y2 % box_size
+      z2m[:] = z2 % box_size
 
     # If needed, find differences between particle positions in
     # starting frames
     if ta - tc != 0:
-      xdiff[:] = ((x0 // cell) - (x1 // cell) + 0.5) * cell
-      ydiff[:] = ((y0 // cell) - (y1 // cell) + 0.5) * cell
-      zdiff[:] = ((z0 // cell) - (z1 // cell) + 0.5) * cell
+      xdiff[:] = (((x0 // cell) - (x2 // cell) + 0.5) * cell) % box_size
+      ydiff[:] = (((y0 // cell) - (y2 // cell) + 0.5) * cell) % box_size
+      zdiff[:] = (((z0 // cell) - (z2 // cell) + 0.5) * cell) % box_size
 
     # Iterate over ending points for structure factor and add to
     # accumulated structure factor, making sure to only use indices
     # which are within the range of the files.
     for index, tb in enumerate(samples):
-      if (ta < max(tc - j, -tb - j) or
-          ta - n_frames >= min(tc - j, -tb - j) or
+      if (ta < (-tb - j) or
+          ta - n_frames >= (-tb - j) or
           j < (tc - tb) or
           j - n_frames >= (tc - tb)):
         continue
@@ -475,14 +492,14 @@ for i in np.arange(0, n_runs):
         calculate_w(w[1], x2, y2, z2, start + j + ta + tb, x1, y1, z1, i)
 
       # Sort first interval w values into bins for FFT
-      a_bins, dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
+      a_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
 
       # Sort second interval w values into bins for FFT if needed
       if ta != 0 or tc != 0:
         if ta - tc == 0:
-          b_bins, dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+          b_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
         else:
-          b_bins, dummy = np.histogramdd((x2, y2, z2), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+          b_bins, dummy = np.histogramdd((x2m, y2m, z2m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
 
       # Calculate total part of S4
       if ta != 0 or tc != 0:
