@@ -281,9 +281,14 @@ b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float
 self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
 # Accumulator of summed w values for each frame, used for computing
-# second 0 vector term of s4 (term_0_2).
-a_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
-b_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
+# second 0 vector term of S4 (term_0_2).
+a_accum = 0.0
+b_accum = 0.0
+
+# Normalization factors for A and B accumulators for second 0 vector
+# term of S4.
+a_norm = 0
+b_norm = 0
 
 # Temporary value for each run to allow for calculation of each run's
 # self component of s4
@@ -423,7 +428,11 @@ for i in range(0, n_runs):
       a_bins[j], dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
 
       # Accumulate for second term of variance
-      a_accum[j] += np.sum(w[0])
+      a_accum += np.sum(w[0])
+
+      # Normalization factor for second term of variance
+      if i == 0:
+        a_norm += 1
 
     if root - tc >= 0 and root + tb < n_frames:
       # Calculate w values for t3 and t4
@@ -439,7 +448,11 @@ for i in range(0, n_runs):
       b_bins[j], dummy = np.histogramdd((x1, y1, z1), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
 
       # Accumulate for second term of variance
-      b_accum[j] += np.sum(w[1])
+      b_accum += np.sum(w[1])
+
+      # Normalization factor for second term of variance
+      if i == 0:
+        b_norm += 1
 
     # Self S4 calculation, iterates over each possible interval end
     # frame for current start frame
@@ -521,14 +534,14 @@ s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total
 s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
 s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
 
-# Normalize second term of variance across runs
-a_accum /= n_runs
-b_accum /= n_runs
+# Normalize second term of variance across runs and initial times
+a_accum /= n_runs * a_norm
+b_accum /= n_runs * b_norm
 
 # Used with 0 vector for calculating second term of variance. This will
 # later be normalized for number of terms corresponding to each
 # correlation offset. a_accum must be conjugated for the correlation.
-term_0_2 = (fft.fftshift(fft.irfft(np.conjugate(fft.rfft(a_accum)) * fft.rfft(b_accum), n=a_accum.size).real)[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles) / norm
+term_0_2 = a_accum * b_accum / particles
 
 # Subtract second term of variance from 0 vector terms
 s4[stypes.total.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2
