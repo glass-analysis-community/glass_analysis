@@ -9,6 +9,7 @@ def usage():
   print("Arguments:",
         "-n Number of files",
         "-s Frame number to start on (index starts at 1)",
+        "-k Last frame number in range to use for initial times (index starts at 1)",
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
@@ -21,7 +22,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:d:a:q:o:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:s:k:d:a:q:o:p:hfg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -35,6 +36,8 @@ class progtypes(enum.Enum):
 n_files = 1
 # What frame number to start on
 start = 0
+# Last frame number to use for initial times
+end = None
 # Difference between frame pair starts
 framediff = 10
 # Overlap radius for theta function
@@ -57,6 +60,8 @@ for o, a in opts:
     n_files = int(a)
   elif o == "-s":
     start = int(a) - 1
+  elif o == "-k":
+    end = int(a)
   elif o == "-d":
     framediff = int(a)
   elif o == "-a":
@@ -135,6 +140,13 @@ print("#tbsave: %f" %tbsave)
 
 # Number of frames to analyze
 n_frames = total_frames - start
+
+# End of set of frames to use for initial times
+if end == None:
+  end = total_frames
+else:
+  if end > total_frames:
+    raise RuntimeError("End initial time frame beyond set of frames")
 
 # Largest possible offset between samples
 max_offset = n_frames - 1
@@ -221,7 +233,7 @@ for i in range(0, n_frames):
   cm[i][2] = np.mean(z0)
 
 # Iterate over starting points for functions
-for i in np.arange(0, n_frames, framediff):
+for i in np.arange(0, end - start, framediff):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
   if limit_particles == True:
