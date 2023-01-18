@@ -11,6 +11,7 @@ def usage():
         "-r Number of runs, numbered as folders. Script must be run from directory with run directories if specified.",
         "-s Frame number to start on (index starts at 1)",
         "-k Last frame number in range to use for initial times (index starts at 1)",
+        "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
@@ -23,7 +24,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:d:a:q:o:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:hfg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -43,7 +44,9 @@ rundirs = False
 # What frame number to start on
 start = 0
 # Last frame number to use for initial times
-end = None
+initend = None
+# Last frame number to use for either final or initial times
+final = None
 # Difference between frame pair starts
 framediff = 10
 # Overlap radius for theta function
@@ -70,7 +73,9 @@ for o, a in opts:
   elif o == "-s":
     start = int(a) - 1
   elif o == "-k":
-    end = int(a)
+    initend = int(a)
+  elif o == "-m":
+    final = int(a)
   elif o == "-d":
     framediff = int(a)
   elif o == "-a":
@@ -167,15 +172,22 @@ print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
 print("#tbsave: %f" %tbsave)
 
-# Number of frames to analyze
-n_frames = total_frames - start
-
 # End of set of frames to use for initial times
-if end == None:
-  end = total_frames
+if initend == None:
+  initend = total_frames
 else:
-  if end > total_frames:
+  if initend > total_frames:
     raise RuntimeError("End initial time frame beyond set of frames")
+
+# End of set of frames to used for both final and initial times
+if final == None:
+  final = total_frames
+else:
+  if final > total_frames:
+    raise RuntimeError("End limit time frame beyond set of frames")
+
+# Number of frames to analyze
+n_frames = final - start
 
 # Largest possible offset between samples
 max_offset = n_frames - 1
@@ -282,7 +294,7 @@ for i in range(0, n_runs):
   run_fc[:] = 0.0
 
   # Iterate over starting points for functions
-  for j in np.arange(0, end - start, framediff):
+  for j in np.arange(0, initend - start, framediff):
     which_file = np.searchsorted(fileframes, start + j, side="right") - 1
     offset = start + j - fileframes[which_file]
     if limit_particles == True:
