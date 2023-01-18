@@ -15,8 +15,9 @@ def usage():
         "-d Number of frames between starts of pairs to average (dt)",
         "-a Overlap radius for theta function (default: 0.25)",
         "-q Scattering vector constant (default: 7.25)",
-        "-o Start index (from 1) of particles to limit analysis to"
+        "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
+        "-z Output variance for naive chi_4 instead of standard deviation during multi-run analysis",
         "-h Print usage",
         "Interval increase progression (last specified is used):",
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
@@ -24,7 +25,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:zhfg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -60,6 +61,8 @@ upper_limit = None
 lower_limit = None
 # Type of progression to increase time interval by
 progtype = progtypes.flenner
+# Whether to calculate chi_4 variance instead of standard deviation
+variance_opt = False
 
 for o, a in opts:
   if o == "-h":
@@ -88,11 +91,16 @@ for o, a in opts:
   elif o == "-p":
     limit_particles = True
     upper_limit = int(a)
+  elif o == "-z":
+    variance_opt = True
   elif o == "-f":
     progtype = progtypes.flenner
   elif o == "-g":
     progtype = progtypes.geometric
     geom_base = float(a)
+
+if variance_opt == True and n_runs == 1:
+  print("Warning: Variance calculation specified but only one run to be used", file=sys.stderr)
 
 # Holds number of frames per file
 fileframes = np.empty(n_files + 1, dtype=int)
@@ -250,20 +258,22 @@ msd = np.zeros(n_samples, dtype=float)
 # Accumulated overlap value for each difference in times
 overlap = np.zeros(n_samples, dtype=float)
 
-# Result of scattering function for each difference in times
-fc = np.zeros((n_samples, 3), dtype=float)
+# Result of scattering function for each difference in times. In last
+# dimension, first three indexes are x, y, and z, and last index is
+# average between them.
+fc = np.zeros((n_samples, 4), dtype=float)
 
 # Corresponding quantities for individual runs
 run_msd = np.empty(n_samples, dtype=float)
 run_overlap = np.empty(n_samples, dtype=float)
-run_fc = np.empty((n_samples, 3), dtype=float)
+run_fc = np.empty((n_samples, 4), dtype=float)
 
 if rundirs == True:
-  # Corresponding arrays used for calculating standard deviations
-  # across runs
+  # Corresponding arrays used for calculating standard deviations (or
+  # variances) across runs
   std_msd = np.zeros(n_samples, dtype=float)
   std_overlap = np.zeros(n_samples, dtype=float)
-  std_fc = np.zeros((n_samples, 3), dtype=float)
+  std_fc = np.zeros((n_samples, 4), dtype=float)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
@@ -348,7 +358,10 @@ for i in range(0, n_runs):
 
   # Normalize the accumulated scattering values, thereby obtaining
   # averages over each pair of frames
-  run_fc /= norm.reshape((n_samples, 1))
+  run_fc[:, 0:3] /= norm.reshape((n_samples, 1))
+
+  # Calculate directional average for scattering function
+  run_fc[:, 3] = np.mean(run_fc[:, 0:3], axis=1)
 
   # Normalize the overlap, thereby obtaining an average over each pair
   # of frames
@@ -379,11 +392,17 @@ if rundirs == True:
   std_msd /= n_runs
   std_overlap /= n_runs
 
-  # Calculate standard deviation with means and means of squares of
-  # values
-  std_fc = np.sqrt((std_fc - fc**2) / (n_runs - 1))
-  std_msd = np.sqrt((std_msd - msd**2) / (n_runs - 1))
-  std_overlap = np.sqrt((std_overlap - overlap**2) / (n_runs - 1))
+  if variance_opt == False:
+    # Calculate standard deviation with means and means of squares of
+    # values
+    std_fc = np.sqrt((std_fc - fc**2) / (n_runs - 1))
+    std_msd = np.sqrt((std_msd - msd**2) / (n_runs - 1))
+    std_overlap = np.sqrt((std_overlap - overlap**2) / (n_runs - 1))
+  else:
+    # Calculate variance with means and means of squares of values
+    std_fc = particles * (std_fc - fc**2)
+    std_msd = particles * (std_msd - msd**2)
+    std_overlap = particles * (std_overlap - overlap**2)
 
 print("#dt = %f" %framediff)
 print("#q = %f" %q)
@@ -394,23 +413,23 @@ for i in range(0, n_samples):
   if rundirs == True:
     # Print time difference, msd, averarge overlap, x, y, and z
     # scattering function averages, average of directional scattering
-    # functions, standard deviations of msd, averarge overlap, x, y,
-    # and z scattering function averages, average of directional
-    # scattering function standard deviations, number of frame sets
-    # contributing to such averages, and frame difference
+    # functions, standard deviations (or variances) of msd, averarge
+    # overlap, x, y, and z scattering function averages, average of
+    # directional scattering function standard deviations, number of
+    # frame sets contributing to such averages, and frame difference
     print("%f %f %f %f %f %f %f %f %f %f %f %f %f %d %d" %(time,
                                                            msd[i],
                                                            overlap[i],
                                                            fc[i][0],
                                                            fc[i][1],
                                                            fc[i][2],
-                                                           (fc[i][0]+fc[i][1]+fc[i][2])/3,
+                                                           fc[i][3],
                                                            std_msd[i],
                                                            std_overlap[i],
                                                            std_fc[i][0],
                                                            std_fc[i][1],
                                                            std_fc[i][2],
-                                                           (std_fc[i][0]+std_fc[i][1]+std_fc[i][2])/3,
+                                                           std_fc[i][3],
                                                            norm[i],
                                                            samples[i]))
   else:
@@ -424,6 +443,6 @@ for i in range(0, n_samples):
                                          fc[i][0],
                                          fc[i][1],
                                          fc[i][2],
-                                         (fc[i][0]+fc[i][1]+fc[i][2])/3,
+                                         fc[i][3],
                                          norm[i],
                                          samples[i]))
