@@ -11,6 +11,8 @@ def usage():
         "-n Number of files",
         "-r Number of runs, numbered as folders",
         "-s Frame number to start on (index starts at 1)",
+        "-k Last frame number in range to use for initial times (index starts at 1)",
+        "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
         "-d Number of frames between starts of pairs to average (dt)",
         "-x Number of Fourier transform vector constants to used in addition to q=0",
         "-y Box size in each dimension (assumed to be cubic, required)"
@@ -33,7 +35,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:a:c:o:p:q:v:l:ihfg:t:u:e:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:x:y:a:c:o:p:q:v:l:ihfg:t:u:e:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -64,6 +66,10 @@ n_files = 1
 n_runs = 0
 # What frame number to start on
 start = 0
+# Last frame number to use for initial times
+initend = None
+# Last frame number to use for either final or initial times
+final = None
 # Difference between frame set starts
 framediff = 10
 # Limit of number of Fourier transform vector constants (including q=0)
@@ -102,6 +108,10 @@ for o, a in opts:
     n_runs = int(a)
   elif o == "-s":
     start = int(a) - 1
+  elif o == "-k":
+    initend = int(a)
+  elif o == "-m":
+    final = int(a)
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
@@ -241,8 +251,22 @@ print("#tbsave: %f" %tbsave)
 # Spatial size of individual cell for FFT
 cell = box_size / size_fft
 
-# Number of frames in each run to analyze
-n_frames = total_frames - start
+# End of set of frames to use for initial times
+if initend == None:
+  initend = total_frames
+else:
+  if initend > total_frames:
+    raise RuntimeError("End initial time frame beyond set of frames")
+
+# End of set of frames to used for both final and initial times
+if final == None:
+  final = total_frames
+else:
+  if final > total_frames:
+    raise RuntimeError("End limit time frame beyond set of frames")
+
+# Number of frames to analyze
+n_frames = final - start
 
 # Largest possible average interval width (t_b), adjusting for both
 # space taken up by t_a and t_c and intervals at the beginning which
@@ -401,8 +425,8 @@ for i in range(0, n_runs):
 # Read values for a given frame and run from DCD file, correcting for
 # frame center of mass
 def get_frame(t0, xb0, yb0, zb0, run):
-  which_file = np.searchsorted(fileframes, t0, side="right") - 1
-  offset = t0 - fileframes[which_file]
+  which_file = np.searchsorted(fileframes, start + t0, side="right") - 1
+  offset = start + t0 - fileframes[which_file]
   if limit_particles == True:
     dcdfiles[run][which_file].gdcdp(x, y, z, offset)
     xb0[:] = x[:particles]
@@ -445,12 +469,12 @@ for i in np.arange(0, n_runs):
   run_total_s4[:, :, :, :] = 0.0
 
   # Iterate over starting points for structure factor
-  for j in np.arange(0, n_frames, framediff):
+  for j in np.arange(0, initend - start, framediff):
     if ta < (tc - j) or ta - n_frames >= (tc - j):
       continue
 
     # Get starting frame for first interval and store in x0, y0, z0
-    get_frame(start + j, x0, y0, z0, i)
+    get_frame(j, x0, y0, z0, i)
 
     # Wrap coordinates to box size for binning
     x0m[:] = x0 % box_size
@@ -460,7 +484,7 @@ for i in np.arange(0, n_runs):
     # If needed, get starting frame for second interval and store in
     # x2, y2, z2
     if ta - tc != 0:
-      get_frame(start + j + ta - tc, x2, y2, z2, i)
+      get_frame(j + ta - tc, x2, y2, z2, i)
 
       # Wrap coordinates to box size for binning
       x2m[:] = x2 % box_size
@@ -485,11 +509,11 @@ for i in np.arange(0, n_runs):
         continue
 
       # Calculate w values for first interval
-      calculate_w(w[0], x0, y0, z0, start + j + tb - tc, x1, y1, z1, i)
+      calculate_w(w[0], x0, y0, z0, j + tb - tc, x1, y1, z1, i)
 
       # Calculate w values for second interval if needed
       if ta != 0 or tc != 0:
-        calculate_w(w[1], x2, y2, z2, start + j + ta + tb, x1, y1, z1, i)
+        calculate_w(w[1], x2, y2, z2, j + ta + tb, x1, y1, z1, i)
 
       # Sort first interval w values into bins for FFT
       a_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
