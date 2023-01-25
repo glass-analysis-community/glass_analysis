@@ -117,7 +117,7 @@ if size_fft == None:
   raise RuntimeError("Must specify size for FFT matrix")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -224,27 +224,27 @@ y2 = np.empty(particles, dtype=np.single)
 z2 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = [np.empty((n_init, n_ttypes, 3), dtype=float)] * n_runs
+cm = [np.empty((n_init, n_ttypes, 3), dtype=np.float64)] * n_runs
 
 # Bins for total calculation. Bounds of frame numbers extend beyond
 # what is required for storage in order for autocorrelation calculation
 # to work correctly and not wrap improperly.
-a_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=float)
-b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=float)
-self_bins = np.empty((size_fft, size_fft, size_fft), dtype=float)
+a_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float64)
+b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float64)
+self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
 # Accumulator of summed w values for each frame, used for computing
 # second 0 vector term of s4 (term_0_2).
-a_accum = np.zeros(2 * n_init - 1, dtype=float)
-b_accum = np.zeros(2 * n_init - 1, dtype=float)
+a_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
+b_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
 
 # Accumulates squared values of structure factor component across runs.
-ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=float)
+ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Structure factor variance for each difference in times. The second
 # and third fft dimensions hold values for negative vectors. Since all
 # inputs are real, this is not required for the first fft dimension.
-s4 = np.zeros((n_stypes, n_lags, size_fft, size_fft, (size_fft // 2) + 1), dtype=float)
+s4 = np.zeros((n_stypes, n_lags, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Normalization factor for structure factor variance indices
 norm = np.zeros(n_lags, dtype=np.int64)
@@ -252,9 +252,9 @@ norm = np.zeros(n_lags, dtype=np.int64)
 # W function values for each particle and for both initial and end
 # values
 if wtype == wtypes.theta:
-  w = np.empty((2, particles), dtype=int)
+  w = np.empty((2, particles), dtype=np.int8)
 else:
-  w = np.empty((2, particles), dtype=float)
+  w = np.empty((2, particles), dtype=np.float64)
 
 # Find center of mass of each frame
 tlist = ((ttypes.t1.value, 0),

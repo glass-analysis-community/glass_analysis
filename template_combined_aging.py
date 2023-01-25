@@ -76,7 +76,7 @@ if initial_defined == False:
   raise RuntimeError("Must specify set of initial frame indices")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # Open each trajectory file
@@ -159,7 +159,7 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_frames, 3), dtype=float)
+cm = np.empty((n_frames, 3), dtype=np.float64)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -218,7 +218,7 @@ for i in initial:
     # Compute overlap value
     overlap = np.mean(np.less(np.sqrt(((x1 - cm[j][0]) - (x0 - cm[i][0]))**2 +
                                       ((y1 - cm[j][1]) - (y0 - cm[i][1]))**2 +
-                                      ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2), radius).astype(int))
+                                      ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2), radius).astype(np.int8, copy=False))
 
     itime = dcdfiles[i_which_file].itstart + i_offset * timestep * tbsave
     jtime = dcdfiles[j_which_file].itstart + j_offset * timestep * tbsave

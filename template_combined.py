@@ -95,7 +95,7 @@ for o, a in opts:
     geom_base = float(a)
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -206,7 +206,7 @@ if progtype == progtypes.flenner:
   n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=int)
+  samples = np.empty(n_samples, dtype=np.int64)
 
   # Efficiently fill the array
   samples[0] = 0
@@ -223,7 +223,7 @@ elif progtype == progtypes.geometric:
   # Create array of sample numbers following geometric progression,
   # with flooring to have samples adhere to integer boundaries,
   # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
+  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
   n_samples = samples.size
 
@@ -242,30 +242,30 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_runs, n_frames, 3), dtype=float)
+cm = np.empty((n_runs, n_frames, 3), dtype=np.float64)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_samples, dtype=float)
+msd = np.zeros(n_samples, dtype=np.float64)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_samples, dtype=float)
+overlap = np.zeros(n_samples, dtype=np.float64)
 
 # Result of scattering function for each difference in times. In last
 # dimension, first three indexes are x, y, and z, and last index is
 # average between them.
-fc = np.zeros((n_samples, 4), dtype=float)
+fc = np.zeros((n_samples, 4), dtype=np.float64)
 
 # Corresponding quantities for individual runs
-run_msd = np.empty(n_samples, dtype=float)
-run_overlap = np.empty(n_samples, dtype=float)
-run_fc = np.empty((n_samples, 4), dtype=float)
+run_msd = np.empty(n_samples, dtype=np.float64)
+run_overlap = np.empty(n_samples, dtype=np.float64)
+run_fc = np.empty((n_samples, 4), dtype=np.float64)
 
 if rundirs == True:
   # Corresponding arrays used for calculating standard deviations
   # across runs
-  std_msd = np.zeros(n_samples, dtype=float)
-  std_overlap = np.zeros(n_samples, dtype=float)
-  std_fc = np.zeros((n_samples, 4), dtype=float)
+  std_msd = np.zeros(n_samples, dtype=np.float64)
+  std_overlap = np.zeros(n_samples, dtype=np.float64)
+  std_fc = np.zeros((n_samples, 4), dtype=np.float64)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
@@ -332,7 +332,7 @@ for i in range(0, n_runs):
       # Add overlap value to accumulated value
       run_overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
                                                     ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
-                                                    ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2), radius).astype(int))
+                                                    ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2), radius).astype(np.int8, copy=False))
 
       # Get means of scattering functions of all the particles for each
       # coordinate

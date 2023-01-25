@@ -304,7 +304,7 @@ elif progtype == progtypes.geometric:
   # Create array of sample numbers following geometric progression,
   # with flooring to have samples adhere to integer boundaries,
   # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
+  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
   n_samples = samples.size
 
@@ -393,14 +393,14 @@ norm = np.zeros(n_samples, dtype=np.int64)
 if ta == 0 and tc == 0:
   # If intervals are the same, only one w needs be found
   if wtype == wtypes.theta:
-    w = np.empty((1, particles), dtype=np.bool8)
+    w = np.empty((1, particles), dtype=np.int8)
   else:
     w = np.empty((1, particles), dtype=np.float64)
 else:
   # If intervals are different, different sets of w values must be
   # computed for first and second intervals
   if wtype == wtypes.theta:
-    w = np.empty((2, particles), dtype=np.bool8)
+    w = np.empty((2, particles), dtype=np.int8)
   else:
     w = np.empty((2, particles), dtype=np.float64)
 
@@ -448,7 +448,7 @@ def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
   if wtype == wtypes.theta:
     np.less((xa1 - xa0)**2 +
             (ya1 - ya0)**2 +
-            (za1 - za0)**2, radius**2, out=wa)
+            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, astype=False)
   elif wtype == wtypes.gauss:
     np.exp(-((xa1 - xa0)**2 +
              (ya1 - ya0)**2 +

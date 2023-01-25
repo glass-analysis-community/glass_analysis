@@ -71,7 +71,7 @@ if n_runs <= 1:
   raise RuntimeError("Must have at least 2 runs")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -150,7 +150,7 @@ if progtype == progtypes.flenner:
   n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=int)
+  samples = np.empty(n_samples, dtype=np.int64)
 
   # Efficiently fill the array
   samples[0] = 0
@@ -167,7 +167,7 @@ elif progtype == progtypes.geometric:
   # Create array of sample numbers following geometric progression,
   # with flooring to have samples adhere to integer boundaries,
   # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
+  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
   n_samples = samples.size
 
@@ -180,16 +180,16 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = [np.empty((n_frames, 3), dtype=float)] * n_runs
+cm = [np.empty((n_frames, 3), dtype=np.float64)] * n_runs
 
 # Accumulated msd variance value for each difference in times
-msd = np.zeros(n_samples, dtype=float)
+msd = np.zeros(n_samples, dtype=np.float64)
 
 # Accumulated overlap variance value for each difference in times
-overlap = np.zeros(n_samples, dtype=float)
+overlap = np.zeros(n_samples, dtype=np.float64)
 
 # Result of scattering function variance for each difference in times
-fc = np.zeros((n_samples, 3), dtype=float)
+fc = np.zeros((n_samples, 3), dtype=np.float64)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
@@ -208,12 +208,12 @@ for i in range(0, n_frames):
 # Accumulates squared values of given quantity across runs.
 msd_a2_accum = 0.0
 overlap_a2_acccum = 0.0
-fc_a2_accum = np.empty(3, dtype=float)
+fc_a2_accum = np.empty(3, dtype=np.float64)
 
 # Accumulates values of given quantity across runs.
 msd_a_accum = 0.0
 overlap_a_acccum = 0.0
-fc_a_accum = np.empty(3, dtype=float)
+fc_a_accum = np.empty(3, dtype=np.float64)
 
 # Iterate over starting points for functions
 for i in np.arange(0, n_frames, framediff):
@@ -265,7 +265,7 @@ for i in np.arange(0, n_frames, framediff):
       # Add overlap value to accumulated value
       overlap_run = np.mean(np.less(np.sqrt(((x1 - cm[k][i + j][0]) - (x - cm[k][i][0]))**2 +
                                             ((y1 - cm[k][i + j][1]) - (y - cm[k][i][1]))**2 +
-                                            ((z1 - cm[k][i + j][2]) - (z - cm[k][i][2]))**2), radius).astype(int))
+                                            ((z1 - cm[k][i + j][2]) - (z - cm[k][i][2]))**2), radius).astype(np.int8, copy=False))
 
       overlap_a_accum += overlap_run
       overlap_a2_accum += overlap_run**2

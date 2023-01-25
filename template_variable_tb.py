@@ -21,11 +21,10 @@ def usage():
         "-t Theta function threshold (argument is threshold radius)",
         "-u Double negative exponential/Gaussian (argument is exponential length)",
         "-e Single negative exponential (argument is exponential length)",
-        "-i Imaginary negative exponential with directional dot product (argument is scattering vector constant)",
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:hfg:t:u:e:i:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:hfg:t:u:e:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -40,7 +39,6 @@ class wtypes(enum.Enum):
   theta = 2
   gauss = 3
   exp = 4
-  ima = 5
 
 class stypes(enum.Enum):
   total = 0
@@ -99,9 +97,6 @@ for o, a in opts:
   elif o == "-e":
     wtype = wtypes.exp
     gscale = float(a)
-  elif o == "-i":
-    wtype = wtypes.ima
-    kvec = float(a)
 
 if wtype == wtypes.none:
   raise RuntimeError("No w function type specified")
@@ -110,7 +105,7 @@ if box_size_defined == False:
   raise RuntimeError("Must define box size dimensions")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -186,7 +181,7 @@ if progtype == progtypes.flenner:
   n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=int)
+  samples = np.empty(n_samples, dtype=np.int64)
 
   # Efficiently fill the array
   samples[0] = 0
@@ -203,7 +198,7 @@ elif progtype == progtypes.geometric:
   # Create array of sample numbers following geometric progression,
   # with flooring to have samples adhere to integer boundaries,
   # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
+  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
   n_samples = samples.size
 
@@ -220,21 +215,19 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_runs, n_frames, 3), dtype=float)
+cm = np.empty((n_runs, n_frames, 3), dtype=np.float64)
 
 # Structure factor variance for each difference in times
-variance = np.zeros((n_stypes, n_samples, n_q, 3), dtype=float)
+variance = np.zeros((n_stypes, n_samples, n_q, 3), dtype=np.float64)
 
 # Normalization factor for structure factor variance indices
 norm = np.zeros(n_samples, dtype=np.int64)
 
-# W function values for each particle (if wtypes.ima, component-wise)
-if wtype == wtypes.ima:
-  w = np.empty((3, particles), dtype=float)
-elif wtype == wtypes.theta:
-  w = np.empty(particles, dtype=int)
+# W function values for each particle
+if wtype == wtypes.theta:
+  w = np.empty(particles, dtype=np.int8)
 else:
-  w = np.empty(particles, dtype=float)
+  w = np.empty(particles, dtype=np.float64)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -250,18 +243,15 @@ for i in range(0, n_frames):
 # Accumulates squared values of structure factor component across runs.
 # First dimension is stype (total or self), second is q value index,
 # third is spatial dimension.
-a2_accum = np.empty((2, n_q, 3), dtype=complex)
+a2_accum = np.empty((2, n_q, 3), dtype=np.float64)
 
 # Accumulates values of structure factor component across runs, only
 # used for q=0.0 and for total structure factor.
-a_accum = np.empty(3, dtype=complex)
+a_accum = np.empty(3, dtype=np.float64)
 
 # Special case accumulator of w values across runs, needed for
 # combination of q=0.0 and self structure factor.
-if wtype == wtypes.ima:
-  a_accum_s = np.empty((3, particles), dtype=complex)
-else:
-  a_accum_s = np.empty(particles, dtype=complex)
+a_accum_s = np.empty(particles, dtype=np.float64)
 
 # Iterate over starting points for structure factor
 for i in np.arange(0, n_frames, framediff):
@@ -272,11 +262,10 @@ for i in np.arange(0, n_frames, framediff):
     if j >= (n_frames - i):
       continue
 
-    # Clear run accumulators. j is used to indicate a python complex
-    # number, not the variable j.
-    a2_accum[:] = 0.0+0.0j
-    a_accum[:] = 0.0+0.0j
-    a_accum_s[:] = 0.0+0.0j
+    # Clear run accumulators.
+    a2_accum[:] = 0.0
+    a_accum[:] = 0.0
+    a_accum_s[:] = 0.0
 
     # Iterate over files
     for k in range(0, n_runs):
@@ -302,7 +291,7 @@ for i in np.arange(0, n_frames, framediff):
       if wtype == wtypes.theta:
         w = np.less((x1 - x)**2 +
                     (y1 - y)**2 +
-                    (z1 - z)**2, radius**2).astype(int)
+                    (z1 - z)**2, radius**2).astype(np.int8, copy=False)
       elif wtype == wtypes.gauss:
         w = np.exp(-((x1 - x)**2 +
                      (y1 - y)**2 +
@@ -311,33 +300,17 @@ for i in np.arange(0, n_frames, framediff):
         w = np.exp(-np.sqrt((x1 - x)**2 +
                             (y1 - y)**2 +
                             (z1 - z)**2)/sscale)
-      elif wtype == wtypes.ima:
-        # This may be a vector in the future, for now just take
-        # component-wise with same value
-        w[0] = np.cos(kvec * (x1 - x))
-        w[1] = np.cos(kvec * (y1 - y))
-        w[2] = np.cos(kvec * (z1 - z))
 
       for qindex, q in enumerate(qs):
         # Accumulate for total factors
-        if wtype == wtypes.ima:
-          a2_accum[stypes.total.value][qindex][0] += np.sum(w[0] * np.exp(-1j * q * x))**2
-          a2_accum[stypes.total.value][qindex][1] += np.sum(w[1] * np.exp(-1j * q * y))**2
-          a2_accum[stypes.total.value][qindex][2] += np.sum(w[2] * np.exp(-1j * q * z))**2
-        else:
-          a2_accum[stypes.total.value][qindex][0] += np.sum(w * np.exp(-1j * q * x))**2
-          a2_accum[stypes.total.value][qindex][1] += np.sum(w * np.exp(-1j * q * y))**2
-          a2_accum[stypes.total.value][qindex][2] += np.sum(w * np.exp(-1j * q * z))**2
+        a2_accum[stypes.total.value][qindex][0] += np.sum(w * np.cos(q * x))**2
+        a2_accum[stypes.total.value][qindex][1] += np.sum(w * np.cos(q * y))**2
+        a2_accum[stypes.total.value][qindex][2] += np.sum(w * np.cos(q * z))**2
 
         # Accumulate for self factors.
-        if wtype == wtypes.ima:
-          a2_accum[stypes.self.value][qindex][0] += np.sum((w[0] * np.exp(-1j * q * x))**2)
-          a2_accum[stypes.self.value][qindex][1] += np.sum((w[1] * np.exp(-1j * q * y))**2)
-          a2_accum[stypes.self.value][qindex][2] += np.sum((w[2] * np.exp(-1j * q * z))**2)
-        else:
-          a2_accum[stypes.self.value][qindex][0] += np.sum((w * np.exp(-1j * q * x))**2)
-          a2_accum[stypes.self.value][qindex][1] += np.sum((w * np.exp(-1j * q * y))**2)
-          a2_accum[stypes.self.value][qindex][2] += np.sum((w * np.exp(-1j * q * z))**2)
+        a2_accum[stypes.self.value][qindex][0] += np.sum((w * np.cos(q * x))**2)
+        a2_accum[stypes.self.value][qindex][1] += np.sum((w * np.cos(q * y))**2)
+        a2_accum[stypes.self.value][qindex][2] += np.sum((w * np.cos(q * z))**2)
 
         # Accumulate for second term of variance calculation for q=0.0
         if qindex == 0:
@@ -350,20 +323,16 @@ for i in np.arange(0, n_frames, framediff):
 
     # Calculate the variance for the current index and add it to the
     # accumulator entry corresponding to the value of t_b
-    variance[stypes.total.value][index] += a2_accum[stypes.total.value].real / particles
-    variance[stypes.self.value][index] += a2_accum[stypes.self.value].real / particles
+    variance[stypes.total.value][index] += a2_accum[stypes.total.value] / particles
+    variance[stypes.self.value][index] += a2_accum[stypes.self.value] / particles
 
     # Case for q=0.0, where w value of each particle (stored in
     # a_accum_s) must be used in order to find the term to subtract to
     # find the variance. The summing cannot be done inside the run
     # loop, as averaging over runs must be done before multiplication
     # of terms.
-    if wtype == wtypes.ima:
-      variance[stypes.total.value][index][0] -= (np.sum(a_accum_s, axis=1)**2).real / particles
-      variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2, axis=1).real / particles
-    else:
-      variance[stypes.total.value][index][0] -= (np.sum(a_accum_s)**2).real / particles
-      variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2).real / particles
+    variance[stypes.total.value][index][0] -= (np.sum(a_accum_s)**2) / particles
+    variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2) / particles
 
     # Accumulate the normalization value for this sample offset, which
     # we will use later in computing the mean value for each t_b
@@ -382,9 +351,6 @@ elif wtype == wtypes.gauss:
 elif wtype == wtypes.exp:
   print("#w function type: Single Exponential")
   print("#a = %f" %sscale)
-elif wtype == wtypes.ima:
-  print("#w function type: Imaginary Exponential")
-  print("#k = %f" %kvec)
 
 # Find the distinct component of the variance by subtracting the self
 # part from the total.

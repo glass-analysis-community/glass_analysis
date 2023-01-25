@@ -305,7 +305,7 @@ norm = np.zeros(n_lags, dtype=np.int64)
 # W function values for each particle and for both initial and end
 # values
 if wtype == wtypes.theta:
-  w = np.empty((2, particles), dtype=np.bool8)
+  w = np.empty((2, particles), dtype=np.int8)
 else:
   w = np.empty((2, particles), dtype=np.float64)
 
@@ -391,7 +391,7 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
   if wtype == wtypes.theta:
     np.less((xa1 - xa0)**2 +
             (ya1 - ya0)**2 +
-            (za1 - za0)**2, radius**2, out=wa)
+            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, copy=False)
   elif wtype == wtypes.gauss:
     np.exp(-((xa1 - xa0)**2 +
              (ya1 - ya0)**2 +

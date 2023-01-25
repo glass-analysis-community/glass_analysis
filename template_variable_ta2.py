@@ -130,7 +130,7 @@ if n_runs <= 1:
   raise RuntimeError("Must have at least 2 runs")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # 2D list of files, first dimension across runs, second across files
@@ -225,7 +225,7 @@ if progtype == progtypes.flenner:
   n_lags = 1 + (50 * (magnitude + 1)) + lags_beyond_magnitude
 
   # Allocate that array
-  lags = np.empty(n_lags, dtype=int)
+  lags = np.empty(n_lags, dtype=np.int64)
 
   # Efficiently fill the array
   lags[0] = 0
@@ -242,7 +242,7 @@ elif progtype == progtypes.geometric:
   # Create array of lags following geometric progression, with flooring
   # to have lags adhere to integer boundaries, removing duplicate
   # numbers, and prepending 0
-  lags = np.insert(np.unique(np.floor(np.logspace(0, geom_num, num=(geom_num + 1), base=geom_base)).astype(int)), 0, 0)
+  lags = np.insert(np.unique(np.floor(np.logspace(0, geom_num, num=(geom_num + 1), base=geom_base)).astype(np.int64)), 0, 0)
 
 elif progtype == progtypes.linear:
   # Create evenly spaced array of lag values with same spacing as
@@ -282,10 +282,10 @@ y3 = np.empty(particles, dtype=np.single)
 z3 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = [np.empty((n_frames, 3), dtype=float)] * n_runs
+cm = [np.empty((n_frames, 3), dtype=np.float64)] * n_runs
 
 # Structure factor variance for each difference in times
-s4 = np.zeros((n_stypes, n_lags, n_q, 3), dtype=float)
+s4 = np.zeros((n_stypes, n_lags, n_q, 3), dtype=np.float64)
 
 # Normalization factor for structure factor variance indices
 norm = np.zeros(n_lags, dtype=np.int64)
@@ -293,9 +293,9 @@ norm = np.zeros(n_lags, dtype=np.int64)
 # W function values for each particle and for both initial and end
 # values
 if wtype == wtypes.theta:
-  w = np.empty((2, particles), dtype=int)
+  w = np.empty((2, particles), dtype=np.int8)
 else:
-  w = np.empty((2, particles), dtype=float)
+  w = np.empty((2, particles), dtype=np.float8)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -317,7 +317,7 @@ for i in range(0, n_frames):
 # Accumulates squared values of structure factor component across runs.
 # First dimension is stype (total or self), second is q value index,
 # third is spatial dimension.
-ab_accum = np.empty((2, n_q, 3), dtype=float)
+ab_accum = np.empty((2, n_q, 3), dtype=np.float64)
 
 # Special case accumulator of w values across runs, needed for
 # combination of q=0.0 and self part. Only real values are ever
@@ -360,7 +360,7 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, index1, index2):
   if wtype == wtypes.theta:
     wa[:] = np.less((xa1 - xa0)**2 +
                     (ya1 - ya0)**2 +
-                    (za1 - za0)**2, radius**2).astype(int)
+                    (za1 - za0)**2, radius**2).astype(np.int8, copy=False)
   elif wtype == wtypes.gauss:
     wa[:] = np.exp(-((xa1 - xa0)**2 +
                      (ya1 - ya0)**2 +
