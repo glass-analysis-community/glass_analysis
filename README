@@ -49,7 +49,8 @@ template_variable_ta2.py
   Calculates S4 from multiple runs. This script calculates S4 for a
   progression of values of t_a, which represents the lag between intervals
   (((t_1 + t_2) - (t_3 + t_4)) / 2). This may be made to use a set of q
-  values, but is best used for calculating the static structure factor (q=0).
+  values, but is best used for calculating the naive dynamic susceptibility
+  (q=0).
 
 template_variable_ta_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a linear
@@ -71,7 +72,7 @@ template_variable_tb.py
   Calculates S4 from multiple runs. This script calculates S4 for a
   progression of values of t_b, which represents the average interval
   length (((t_2 - t_1) + (t_4 - t_3)) / 2). This may be made to use a set of
-  q  values, but is best used for calculating the static structure factor
+  q  values, but is best used for calculating the naive dynamic susceptibility
   (q=0).
 
 template_variable_tb_sfft_qshell.py
