@@ -15,7 +15,7 @@ def usage():
         "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
         "-h Print usage",
-        "-g Number of frames in geometric sequence (may be less due to rounding)",
+        "-g Number of interval length values in geometric sequence (may be less due to rounding)",
         sep="\n", file=sys.stderr)
 
 try:
@@ -74,7 +74,7 @@ if geom_num == None:
   raise RuntimeError("Must specify number of elements in geometric sampling sequence")
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
+fileframes = np.empty(n_files + 1, dtype=np.int64)
 fileframes[0] = 0
 
 # Open each trajectory file
@@ -139,15 +139,15 @@ if n_frames < 2 * set_len:
                      "cycle, one may use non-averaging script instead.")
 
 # Cycle of offset times
-samp_cycle = np.empty(set_len, dtype=int)
+samp_cycle = np.empty(set_len, dtype=np.int64)
 which_file = np.searchsorted(fileframes, start, side="right") - 1
 offset = start - fileframes[which_file]
-t1 = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
+t1 = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 for i in range(0, set_len):
   t0 = t1
   which_file = np.searchsorted(fileframes, start + i + 1, side="right") - 1
   offset = start + i + 1 - fileframes[which_file]
-  t1 = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
+  t1 = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
   # Store differences in iteration increments
   samp_cycle[i] = t1 - t0
@@ -158,16 +158,16 @@ samp_sum = np.sum(samp_cycle)
 # Get time of frame 0
 which_file = np.searchsorted(fileframes, start, side="right") - 1
 offset = start - fileframes[which_file]
-zero_time = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
+zero_time = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
 # Cumulative sum of sample cycle
 samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
 
-# Verify that timesteps do indeed follow cycle
+# Verify that iterations do indeed follow cycle
 for i in range(0, n_frames):
   which_file = np.searchsorted(fileframes, start + i, side="right") - 1
   offset = start + i - fileframes[which_file]
-  t = dcdfiles[which_file].itstart + offset * timestep * dcdfiles[which_file].tbsave
+  t = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
   if t != samp_cycle_sum[i % set_len] + (i // set_len) * samp_sum + zero_time:
     raise RuntimeError("Frame %d in file %d does not seem to follow "
@@ -181,7 +181,7 @@ samp_cycle = np.roll(samp_cycle, -shift_index)
 samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
 
 # Holds frame number offsets from initial time to sample
-samples = np.empty(geom_num, dtype=int)
+samples = np.empty(geom_num, dtype=np.int64)
 
 # Base to use for geometric sequence to approximately fit full sample size
 geom_base = (samp_cycle_sum[(n_frames - 1) % set_len] + ((n_frames - 1) // set_len) * samp_sum)**(1 / geom_num)
@@ -224,16 +224,16 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_frames, 3), dtype=float)
+cm = np.empty((n_frames, 3), dtype=np.float64)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_samples, dtype=float)
+msd = np.zeros(n_samples, dtype=np.float64)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_samples, dtype=float)
+overlap = np.zeros(n_samples, dtype=np.float64)
 
 # Result of scattering function for each difference in times
-fc = np.zeros((n_samples, 3), dtype=float)
+fc = np.zeros((n_samples, 3), dtype=np.float64)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
@@ -323,7 +323,7 @@ overlap /= norm
 msd /= norm
 
 for i in range(0, n_samples):
-  time = (samples[i]//set_len) * samp_sum + samp_cycle_sum[samples[i]%set_len]
+  time = timestep * ((samples[i]//set_len) * samp_sum + samp_cycle_sum[samples[i]%set_len])
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, average of directional scattering
   # function number of frame sets contributing to such averages, and
