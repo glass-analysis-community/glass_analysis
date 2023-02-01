@@ -413,9 +413,9 @@ for i in range(0, n_runs):
 
     if limit_particles == True:
       dcdfiles[i][which_file].gdcdp(x, y, z, offset)
-      cm[i][j][0] = np.mean(x[upper_limit:lower_limit])
-      cm[i][j][1] = np.mean(y[upper_limit:lower_limit])
-      cm[i][j][2] = np.mean(z[upper_limit:lower_limit])
+      cm[i][j][0] = np.mean(x[lower_limit:upper_limit])
+      cm[i][j][1] = np.mean(y[lower_limit:upper_limit])
+      cm[i][j][2] = np.mean(z[lower_limit:upper_limit])
     else:
       dcdfiles[i][which_file].gdcdp(x0, y0, z0, offset)
       cm[i][j][0] = np.mean(x0)
@@ -429,9 +429,9 @@ def get_frame(t0, xb0, yb0, zb0, run):
   offset = start + t0 - fileframes[which_file]
   if limit_particles == True:
     dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xb0[:] = x[:particles]
-    yb0[:] = y[:particles]
-    zb0[:] = z[:particles]
+    xb0[:] = x[lower_limit:upper_limit]
+    yb0[:] = y[lower_limit:upper_limit]
+    zb0[:] = z[lower_limit:upper_limit]
   else:
     dcdfiles[run][which_file].gdcdp(xb0, yb0, zb0, offset)
 

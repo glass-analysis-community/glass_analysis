@@ -16,7 +16,7 @@ def usage():
         "-y Box size in each dimension (assumed to be cubic, required)"
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
-        "-o Start index (from 1) of particles to limit analysis to"
+        "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
         "-q Upper boundary for first q region with discrete q values (integer to multiply minimum q value)",
         "-v Upper boundary for second q region divided into onion shells (integer to multiply minimum q value)",
@@ -329,9 +329,9 @@ for i in range(0, n_init):
 
       if limit_particles == True:
         dcdfiles[j][which_file].gdcdp(x, y, z, offset)
-        cm[j][i][ttype][0] = np.mean(x[upper_limit:lower_limit])
-        cm[j][i][ttype][1] = np.mean(y[upper_limit:lower_limit])
-        cm[j][i][ttype][2] = np.mean(z[upper_limit:lower_limit])
+        cm[j][i][ttype][0] = np.mean(x[lower_limit:upper_limit])
+        cm[j][i][ttype][1] = np.mean(y[lower_limit:upper_limit])
+        cm[j][i][ttype][2] = np.mean(z[lower_limit:upper_limit])
       else:
         dcdfiles[j][which_file].gdcdp(x0, y0, z0, offset)
         cm[j][i][ttype][0] = np.mean(x0)
@@ -362,9 +362,9 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
   offset = start + index1 - fileframes[which_file]
   if limit_particles == True:
     dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xa0[:] = x[:particles]
-    ya0[:] = y[:particles]
-    za0[:] = z[:particles]
+    xa0[:] = x[lower_limit:upper_limit]
+    ya0[:] = y[lower_limit:upper_limit]
+    za0[:] = z[lower_limit:upper_limit]
   else:
     dcdfiles[run][which_file].gdcdp(xa0, ya0, za0, offset)
 
@@ -373,9 +373,9 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
   offset = start + index2 - fileframes[which_file]
   if limit_particles == True:
     dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xa1[:] = x[:particles]
-    ya1[:] = y[:particles]
-    za1[:] = z[:particles]
+    xa1[:] = x[lower_limit:upper_limit]
+    ya1[:] = y[lower_limit:upper_limit]
+    za1[:] = z[lower_limit:upper_limit]
   else:
     dcdfiles[run][which_file].gdcdp(xa1, ya1, za1, offset)
 
