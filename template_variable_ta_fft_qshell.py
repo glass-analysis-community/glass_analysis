@@ -13,13 +13,13 @@ def usage():
         "-s Frame number to start on (index starts at 1)",
         "-d Spacing between initial times as well as lag values (dt)",
         "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
-        "-y Box size in each dimension (assumed to be cubic, required)"
+        "-y Box size in each dimension (assumed to be cubic, required)",
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
         "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
-        "-q Upper boundary for first q region with discrete q values (integer to multiply minimum q value)",
-        "-v Upper boundary for second q region divided into onion shells (integer to multiply minimum q value)",
+        "-q Upper boundary for first q region with discrete q values",
+        "-v Upper boundary for second q region divided into onion shells",
         "-l Number of onion shells to use in second q region",
         "-i Write output to files, one for each lag time",
         "-h Print usage",
@@ -157,6 +157,16 @@ if size_fft > 1:
 
   if shells == None:
     raise RuntimeError("Must specify number of onion shells in second region if nonzero q values used")
+
+  # Convert upper boundaries of regions to multipliers of smallest q
+  # magnitude
+  qb1 = qb1 * box_size / (2 * math.pi)
+  qb2 = qb2 * box_size / (2 * math.pi)
+
+else:
+  # Only q=0 being calculated, q regions of 0 width
+  qb1 = 0.0
+  qb2 = 0.0
 
 # Holds number of frames per file
 fileframes = np.empty(n_files + 1, dtype=np.int64)
@@ -683,7 +693,7 @@ for i in range(0, n_lags):
   # frame difference corresponding to t_a
   for j in range(0, len(qlist_discrete_sorted)):
     file.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
-                                                      qlist_discrete_sorted[j]/box_size,
+                                                      qlist_discrete_sorted[j])*2*math.pi/box_size,
                                                       qnorm_discrete_sorted[j],
                                                       qaccum_discrete[stypes.total.value][j],
                                                       qaccum_discrete[stypes.self.value][j],
@@ -701,7 +711,7 @@ for i in range(0, n_lags):
   # such averages, and frame difference corresponding to t_a
   for j in range(0, len(qlist_shells)):
     file.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
-                                                      (qb1+(qlist_shells[j]+0.5)*swidth)/box_size,
+                                                      (qb1+(qlist_shells[j]+0.5)*swidth)*2*math.pi/box_size,
                                                       qnorm_shells[j],
                                                       qaccum_shells[stypes.total.value][j],
                                                       qaccum_shells[stypes.self.value][j],

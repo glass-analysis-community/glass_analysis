@@ -507,4 +507,4 @@ for i in range(0, n_lags):
         # self, and distinct averages, number of frame sets
         # contributing to such average, and frame difference
         # corresponding to t_a
-        print("%f %f %f %f %f %f %f %d %d" %(time_ta, (j-size_fft//2)/box_size, (k-size_fft//2)/box_size, l/box_size, s4[stypes.total.value][i][j][k][l], s4[stypes.self.value][i][j][k][l], s4[stypes.distinct.value][i][j][k][l], norm[i], lags[i]))
+        print("%f %f %f %f %f %f %f %d %d" %(time_ta, (j-size_fft//2)*2*math.pi/box_size, (k-size_fft//2)*2*math.pi/box_size, l*2*math.pi/box_size, s4[stypes.total.value][i][j][k][l], s4[stypes.self.value][i][j][k][l], s4[stypes.distinct.value][i][j][k][l], norm[i], lags[i]))
