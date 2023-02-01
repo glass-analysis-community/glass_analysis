@@ -581,11 +581,10 @@ qb2u = min(int(qb2), (size_fft - 1) // 2)
 if shells != 0:
   swidth = (qb2 - qb1) / shells
 
-# List of q values to use, first region is for shell intervals, second,
-# to be appended, is for specific q values. First region does not
-# contain actual q values, as intervals are calculated later. Instead,
-# the first region (index < shells) contains shell numbers.
+# List of shell numbers to use for shell intervals
 qlist_shells = list(range(0, shells))
+
+# List of q values to use for region of discrete q values
 qlist_discrete = list()
 
 # Norm for number of FFT matrix elements corresponding to each element
