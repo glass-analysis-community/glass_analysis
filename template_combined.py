@@ -24,10 +24,13 @@ def usage():
         "Interval increase progression (last specified is used):",
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
         "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is geometric base)",
+        "Interval increase progression modifiers:",
+        "--low-interval Trim set of interval lengths below value",
+        "--high-interval Trim set of interval lengths above value",
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:hfg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:hfg:", ["low-interval=", "high-interval="])
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -63,6 +66,9 @@ upper_limit = None
 lower_limit = None
 # Type of progression to increase time interval by
 progtype = progtypes.flenner
+# Limits of interval lengths to use
+low_interval = None
+high_interval = None
 
 for o, a in opts:
   if o == "-h":
@@ -96,6 +102,10 @@ for o, a in opts:
   elif o == "-g":
     progtype = progtypes.geometric
     geom_base = float(a)
+  elif o == "--low-interval":
+    low_interval = int(a)
+  elif o == "--high-interval":
+    high_interval = int(a)
 
 # Holds number of frames per file
 fileframes = np.empty(n_files + 1, dtype=int)
@@ -185,6 +195,14 @@ elif progtype == progtypes.geometric:
   # removing duplicate numbers, and prepending 0
   samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
 
+  n_samples = samples.size
+
+# Trim samples list to specified limits
+if low_interval != None:
+  samples = samples[samples >= low_interval]
+  n_samples = samples.size
+if high_interval != None:
+  samples = samples[samples <= high_interval]
   n_samples = samples.size
 
 # If particles limited, must be read into different array
