@@ -5,6 +5,9 @@ import math
 import getopt
 import enum
 
+# Import functionality from local library directory
+import lib.opentraj
+
 def usage():
   print("Arguments:",
         "-n Number of files",
@@ -95,58 +98,18 @@ for o, a in opts:
     geom_base = float(a)
 
 # Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=np.int64)
+fileframes = np.empty(n_files + 1, dtype=int)
 fileframes[0] = 0
 
-# 2D list of files, first dimension across runs, second across files
-# within each run
-dcdfiles = list()
-
 # Open each trajectory file
-total_frames = 0
-for i in range(0, n_runs):
-  dcdfiles.append(list())
-  for j in range(0, n_files):
-    # The file object can be discarded after converting it to a dcd_file,
-    # as the dcd_file duplicates the underlying file descriptor.
-    if rundirs == True:
-      file = open("run%d/traj%d.dcd" %(i + 1, j + 1), "r")
-    else:
-      file = open("traj%d.dcd" %(j + 1), "r")
-    dcdfiles[i].append(pydcd.dcdfile(file))
-    file.close()
+if rundirs == True:
+  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", True)
+else:
+  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj(n_files, "traj", True)
+  dcdfiles = list((dcdfiles, ))
 
-    # Make sure each trajectory file in each run mirrors the files in
-    # other runs and has the same time step and number of particles
-    if i == 0:
-      fileframes[j + 1] = dcdfiles[i][j].nset
-      total_frames += dcdfiles[i][j].nset
-
-      if j == 0:
-        # Number of particles in files, may not be same as limited
-        # number in analysis
-        fparticles = dcdfiles[i][j].N
-
-        timestep = dcdfiles[i][j].timestep
-        tbsave = dcdfiles[i][j].tbsave
-      else:
-        if dcdfiles[i][j].N != fparticles:
-          raise RuntimeError("Not the same number of particles in each file")
-        if dcdfiles[i][j].timestep != timestep:
-          raise RuntimeError("Not the same time step in each file")
-        if dcdfiles[i][j].tbsave != tbsave:
-          raise RuntimeError("Not the same frame difference between saves in each file")
-
-    else:
-      if dcdfiles[i][j].nset != fileframes[j + 1]:
-        raise RuntimeError("Not the same number of frames in each run for corresponding files")
-
-      if dcdfiles[i][j].N != fparticles:
-        raise RuntimeError("Not the same number of particles in each file")
-      if dcdfiles[i][j].timestep != timestep:
-        raise RuntimeError("Not the same time step in each file")
-      if dcdfiles[i][j].tbsave != tbsave:
-        raise RuntimeError("Not the same frame difference between saves in each file")
+# Now holds total index of last frame in each file
+fileframes = np.cumsum(fileframes)
 
 # Limit particles if necessary
 if limit_particles == False:
@@ -163,27 +126,24 @@ else:
     particles = fparticles
     limit_particles = False
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Print basic properties shared across the files
-print("#nset: %d" %total_frames)
+print("#nset: %d" %fileframes[-1])
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
 print("#tbsave: %f" %tbsave)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = total_frames
+  initend = fileframes[-1]
 else:
-  if initend > total_frames:
+  if initend > fileframes[-1]:
     raise RuntimeError("End initial time frame beyond set of frames")
 
 # End of set of frames to used for both final and initial times
 if final == None:
-  final = total_frames
+  final = fileframes[-1]
 else:
-  if final > total_frames:
+  if final > fileframes[-1]:
     raise RuntimeError("End limit time frame beyond set of frames")
 
 # Number of frames to analyze
@@ -206,7 +166,7 @@ if progtype == progtypes.flenner:
   n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=np.int64)
+  samples = np.empty(n_samples, dtype=int)
 
   # Efficiently fill the array
   samples[0] = 0
@@ -223,7 +183,7 @@ elif progtype == progtypes.geometric:
   # Create array of sample numbers following geometric progression,
   # with flooring to have samples adhere to integer boundaries,
   # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
+  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
 
   n_samples = samples.size
 
@@ -242,30 +202,30 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_runs, n_frames, 3), dtype=np.float64)
+cm = np.empty((n_runs, n_frames, 3), dtype=float)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_samples, dtype=np.float64)
+msd = np.zeros(n_samples, dtype=float)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_samples, dtype=np.float64)
+overlap = np.zeros(n_samples, dtype=float)
 
 # Result of scattering function for each difference in times. In last
 # dimension, first three indexes are x, y, and z, and last index is
 # average between them.
-fc = np.zeros((n_samples, 4), dtype=np.float64)
+fc = np.zeros((n_samples, 4), dtype=float)
 
 # Corresponding quantities for individual runs
-run_msd = np.empty(n_samples, dtype=np.float64)
-run_overlap = np.empty(n_samples, dtype=np.float64)
-run_fc = np.empty((n_samples, 4), dtype=np.float64)
+run_msd = np.empty(n_samples, dtype=float)
+run_overlap = np.empty(n_samples, dtype=float)
+run_fc = np.empty((n_samples, 4), dtype=float)
 
 if rundirs == True:
   # Corresponding arrays used for calculating standard deviations
   # across runs
-  std_msd = np.zeros(n_samples, dtype=np.float64)
-  std_overlap = np.zeros(n_samples, dtype=np.float64)
-  std_fc = np.zeros((n_samples, 4), dtype=np.float64)
+  std_msd = np.zeros(n_samples, dtype=float)
+  std_overlap = np.zeros(n_samples, dtype=float)
+  std_fc = np.zeros((n_samples, 4), dtype=float)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
@@ -332,7 +292,7 @@ for i in range(0, n_runs):
       # Add overlap value to accumulated value
       run_overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
                                                     ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
-                                                    ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2), radius).astype(np.int8, copy=False))
+                                                    ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2), radius).astype(int))
 
       # Get means of scattering functions of all the particles for each
       # coordinate
