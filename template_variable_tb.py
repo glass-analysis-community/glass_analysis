@@ -5,6 +5,9 @@ import math
 import getopt
 import enum
 
+# Import functionality from local library directory
+import lib.opentraj
+
 def usage():
   print("Arguments:",
         "-n Number of files",
@@ -104,65 +107,20 @@ if wtype == wtypes.none:
 if box_size_defined == False:
   raise RuntimeError("Must define box size dimensions")
 
-# Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=np.int64)
-fileframes[0] = 0
-
-# 2D list of files, first dimension across runs, second across files
-# within each run
-dcdfiles = list()
-
-# Open each trajectory file
-total_frames = 0
-for i in range(0, n_runs):
-  dcdfiles.append(list())
-  for j in range(0, n_files):
-    # The file object can be discarded after converting it to a dcd_file,
-    # as the dcd_file duplicates the underlying file descriptor.
-    if rundirs == True:
-      file = open("run%d/traj%d.dcd" %(i + 1, j + 1), "r")
-    else:
-      file = open("traj%d.dcd" %(j + 1), "r")
-    dcdfiles[i].append(pydcd.dcdfile(file))
-    file.close()
-
-    # Make sure each trajectory file in each run mirrors the files in
-    # other runs and has the same time step and number of particles
-    if i == 0:
-      fileframes[j + 1] = dcdfiles[i][j].nset
-      total_frames += dcdfiles[i][j].nset
-
-      if j == 0:
-        particles = dcdfiles[i][j].N
-        timestep = dcdfiles[i][j].timestep
-        tbsave = dcdfiles[i][j].tbsave
-      else:
-        if dcdfiles[i][j].N != particles:
-          raise RuntimeError("Not the same number of particles in each file")
-        if dcdfiles[i][j].timestep != timestep:
-          raise RuntimeError("Not the same time step in each file")
-        if dcdfiles[i][j].tbsave != tbsave:
-          raise RuntimeError("Not the same frame difference between saves in each file")
-
-    else:
-      if dcdfiles[i][j].nset != fileframes[j + 1]:
-        raise RuntimeError("Not the same number of frames in each run for corresponding files")
-
-      if dcdfiles[i][j].N != particles:
-        raise RuntimeError("Not the same number of particles in each file")
-      if dcdfiles[i][j].timestep != timestep:
-        raise RuntimeError("Not the same time step in each file")
-      if dcdfiles[i][j].tbsave != tbsave:
-        raise RuntimeError("Not the same frame difference between saves in each file")
+# Open trajectory files
+dcdfiles, fileframes, particles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
 
 # Now holds total index of last frame in each file
 fileframes = np.cumsum(fileframes)
 
 # Print basic properties shared across the files
-print("%d %d" %(total_frames, particles), file=sys.stderr)
+print("#nset: %d" %fileframes[-1])
+print("#N: %d" %particles)
+print("#timestep: %f" %timestep)
+print("#tbsave: %f" %tbsave)
 
 # Number of frames in each run to analyze
-n_frames = total_frames - start
+n_frames = fileframes[-1] - start
 
 # Largest possible offset between samples
 max_offset = n_frames - 1

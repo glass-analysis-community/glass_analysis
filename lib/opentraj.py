@@ -1,7 +1,7 @@
 import numpy as np
 import pydcd
 
-def opentraj(n, name, same_tbsave):
+def opentraj(n, name, n_start, same_tbsave):
   """
   Open a set of trajectory files, running consistency checks. Returns
   a list of dcd file objects, an array with the number of frames in
@@ -10,6 +10,7 @@ def opentraj(n, name, same_tbsave):
   single tbsave value.
   n - Number of trajectory files
   name - Prefix of name of each DCD file
+  n_start -- Index on which trajectory file numbering starts
   same_tbsave - If tbsave is supposed to be the same for each file in
     series
   """
@@ -29,7 +30,7 @@ def opentraj(n, name, same_tbsave):
     # The file object can be discarded after converting it to a
     # dcd_file, as the dcd_file duplicates the underlying file
     # descriptor.
-    file = open("%s%d.dcd" %(name, i + 1), "r")
+    file = open("%s%d.dcd" %(name, n_start + i), "r")
     dcdfiles.append(pydcd.dcdfile(file))
     file.close()
 
@@ -65,7 +66,7 @@ def opentraj(n, name, same_tbsave):
   else:
     return dcdfiles, fileframes, fparticles, timestep, tbsaves
 
-def opentraj_multirun(r, runname, n, name, same_tbsave):
+def opentraj_multirun(r, runname, n, name, n_start, same_tbsave):
   """
   Open a set of trajectory files in multiple runs, running consistency
   checks. Returns a 2D list of dcd file objects, an array with the
@@ -76,6 +77,7 @@ def opentraj_multirun(r, runname, n, name, same_tbsave):
   runname - Prefix of name of each run directory
   n - Number of trajectory files
   name - Prefix of name of each DCD file
+  n_start -- Index on which trajectory file numbering starts
   same_tbsave - If tbsave is supposed to be the same for each file in
     series
   """
@@ -87,17 +89,17 @@ def opentraj_multirun(r, runname, n, name, same_tbsave):
   for i in range(0, r):
     if i == 0:
       if same_tbsave == True:
-        dcdfile, fileframes, fparticles, timestep, tbsave = opentraj(n, "%s%d/%s" %(runname, i + 1, name), same_tbsave)
+        dcdfile, fileframes, fparticles, timestep, tbsave = opentraj(n, "%s%d/%s" %(runname, i + 1, name), n_start, same_tbsave)
       elif same_tbsave == False:
-        dcdfile, fileframes, fparticles, timestep, tbsaves = opentraj(n, "%s%d/%s" %(runname, i + 1, name), same_tbsave)
+        dcdfile, fileframes, fparticles, timestep, tbsaves = opentraj(n, "%s%d/%s" %(runname, i + 1, name), n_start, same_tbsave)
       else:
         raise RuntimeError("Invalid value of same_tbsave, must be Boolean")
 
     else:
       if same_tbsave == True:
-        dcdfile, r_fileframes, r_fparticles, r_timestep, r_tbsave = opentraj(n, "%s%d/%s" %(runname, i + 1, name), same_tbsave)
+        dcdfile, r_fileframes, r_fparticles, r_timestep, r_tbsave = opentraj(n, "%s%d/%s" %(runname, i + 1, name), n_start, same_tbsave)
       else:
-        dcdfile, r_fileframes, r_fparticles, r_timestep, r_tbsaves = opentraj(n, "%s%d/%s" %(runname, i + 1, name), same_tbsave)
+        dcdfile, r_fileframes, r_fparticles, r_timestep, r_tbsaves = opentraj(n, "%s%d/%s" %(runname, i + 1, name), n_start, same_tbsave)
 
       # Consistency checks across runs
 

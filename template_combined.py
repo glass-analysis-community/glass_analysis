@@ -107,15 +107,11 @@ for o, a in opts:
   elif o == "--high-interval":
     high_interval = int(a)
 
-# Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=int)
-fileframes[0] = 0
-
-# Open each trajectory file
+# Open trajectory files
 if rundirs == True:
-  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", True)
+  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
 else:
-  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj(n_files, "traj", True)
+  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj(n_files, "traj", 1, True)
   dcdfiles = list((dcdfiles, ))
 
 # Now holds total index of last frame in each file

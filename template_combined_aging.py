@@ -5,10 +5,14 @@ import math
 import getopt
 import enum
 
+# Import functionality from local library directory
+import lib.opentraj
+
 def usage():
   print("Arguments:",
         "-n Number of traj(n).dcd files (analyzed as first in sequence)",
         "-m Number of short(m).dcd files (analyzed as second in sequence)",
+        "-z short(m).dcd file index to start on (default: 1)",
         "-s Frame number to start on (index starts at 1)",
         "-e Frame number to end on (index starts at 1)",
         "-i Initial frame numbers (start at 1, added to start specified with -s)",
@@ -20,7 +24,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:m:i:s:e:i:a:q:o:p:h")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:m:z:i:s:e:i:a:q:o:p:h")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -30,6 +34,8 @@ except getopt.GetoptError as err:
 n_files = 0
 # Number of short files
 m_files = 0
+# Start trajectory file index in filenames for second region
+m_start = 1
 # What frame number to start on
 start = 0
 # What frame number to end on
@@ -54,6 +60,8 @@ for o, a in opts:
     n_files = int(a)
   elif o == "-m":
     m_files = int(a)
+  elif o == "-z":
+    m_start = int(a)
   elif o == "-s":
     start = int(a) - 1
   elif o == "-e":
@@ -75,42 +83,14 @@ for o, a in opts:
 if initial_defined == False:
   raise RuntimeError("Must specify set of initial frame indices")
 
-# Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=np.int64)
-fileframes[0] = 0
+# Open trajectory files
+dcdfiles, fileframes, fparticles, timestep, tbsaves = lib.opentraj.opentraj(n_files, "traj", 1, False)
+short_dcdfiles, short_fileframes, fparticles, timestep, tbsaves = lib.opentraj.opentraj(m_files, "short", m_start, False)
+dcdfiles += short_dcdfiles
+fileframes = np.append(fileframes, short_fileframes[1:])
 
-# Open each trajectory file
-total_frames = 0
-dcdfiles = list()
-for i in range(0, n_files + m_files):
-  # The file object can be discarded after converting it to a dcd_file,
-  # as the dcd_file duplicates the underlying file descriptor.
-  if i < n_files:
-    file = open("traj%d.dcd" %(i + 1), "r")
-  else:
-    file = open("short%d.dcd" %(i + 1 - n_files), "r")
-  dcdfiles.append(pydcd.dcdfile(file))
-  file.close()
-
-  # Make sure each trajectory file has the same time step and number
-  # of particles
-  if i == 0:
-    # Number of particles in files, may not be same as limited
-    # number in analysis
-    fparticles = dcdfiles[i].N
-
-    timestep = dcdfiles[i].timestep
-    tbsave = dcdfiles[i].tbsave
-  else:
-    if dcdfiles[i].N != fparticles:
-      raise RuntimeError("Not the same number of particles in each file")
-    if dcdfiles[i].timestep != timestep:
-      raise RuntimeError("Not the same time step in each file")
-    if dcdfiles[i].tbsave != tbsave:
-      raise RuntimeError("Not the same frame difference between saves in each file")
-
-  fileframes[i + 1] = dcdfiles[i].nset
-  total_frames += dcdfiles[i].nset
+# Now holds total index of last frame in each file
+fileframes = np.cumsum(fileframes)
 
 # Limit particles if necessary
 if limit_particles == False:
@@ -127,20 +107,16 @@ else:
     particles = fparticles
     limit_particles = False
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Print basic properties shared across the files
-print("#nset: %d" %total_frames)
+print("#nset: %d" %fileframes[-1])
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
-print("#tbsave: %f" %tbsave)
 print("#q = %f" %q)
 print("#a = %f" %radius)
 
 # Number of frames to analyze
 if end == None:
-  n_frames = total_frames - start
+  n_frames = fileframes[-1] - start
 else:
   n_frames = (end + 1) - start
 
@@ -220,8 +196,8 @@ for i in initial:
                                       ((y1 - cm[j][1]) - (y0 - cm[i][1]))**2 +
                                       ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2), radius).astype(np.int8, copy=False))
 
-    itime = dcdfiles[i_which_file].itstart + i_offset * timestep * tbsave
-    jtime = dcdfiles[j_which_file].itstart + j_offset * timestep * tbsave
+    itime = dcdfiles[i_which_file].itstart + i_offset * timestep * dcdfiles[i_which_file].tbsave
+    jtime = dcdfiles[j_which_file].itstart + j_offset * timestep * dcdfiles[j_which_file].tbsave
     # Print initial frame index, initial time, final frame index, final
     # time, and time difference for interval, along with msd, averarge
     # overlap, x, y, and z scattering functions, and average scattering

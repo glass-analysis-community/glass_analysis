@@ -5,9 +5,13 @@ import math
 import getopt
 import enum
 
+# Import functionality from local library directory
+import lib.opentraj
+
 def usage():
   print("Arguments:",
         "-m Number of files",
+        "-z short(m).dcd file index to start on (default: 1)",
         "-c Number of frames in trajectory offset cycle of files",
         "-s Frame number to start on (index starts at 1)",
         "-a Overlap radius for theta function (default: 0.25)",
@@ -19,7 +23,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "m:c:s:a:q:o:p:hg:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "m:z:c:s:a:q:o:p:hg:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -27,6 +31,8 @@ except getopt.GetoptError as err:
 
 # Total number of trajectory files
 n_files = 1
+# Start trajectory file index in filenames for second region
+m_start = 1
 # Length in frames of cycle of offsets
 set_len = None
 # What frame number to start on
@@ -50,6 +56,8 @@ for o, a in opts:
     sys.exit(0)
   elif o == "-m":
     n_files = int(a)
+  elif o == "-z":
+    m_start = int(a)
   elif o == "-c":
     set_len = int(a)
   elif o == "-s":
@@ -73,36 +81,11 @@ if set_len == None:
 if geom_num == None:
   raise RuntimeError("Must specify number of elements in geometric sampling sequence")
 
-# Holds number of frames per file
-fileframes = np.empty(n_files + 1, dtype=np.int64)
-fileframes[0] = 0
+# Open trajectory files
+dcdfiles, fileframes, fparticles, timestep, tbsaves = lib.opentraj.opentraj(n_files, "short", m_start, False)
 
-# Open each trajectory file
-total_frames = 0
-dcdfiles = list()
-for i in range(0, n_files):
-  # The file object can be discarded after converting it to a dcd_file,
-  # as the dcd_file duplicates the underlying file descriptor.
-  file = open("short%d.dcd" %(i + 1), "r")
-  dcdfiles.append(pydcd.dcdfile(file))
-  file.close()
-
-  # Make sure each trajectory file has the same time step and number
-  # of particles
-  if i == 0:
-    # Number of particles in files, may not be same as limited
-    # number in analysis
-    fparticles = dcdfiles[i].N
-
-    timestep = dcdfiles[i].timestep
-  else:
-    if dcdfiles[i].N != fparticles:
-      raise RuntimeError("Not the same number of particles in each file")
-    if dcdfiles[i].timestep != timestep:
-      raise RuntimeError("Not the same time step in each file")
-
-  fileframes[i + 1] = dcdfiles[i].nset
-  total_frames += dcdfiles[i].nset
+# Now holds total index of last frame in each file
+fileframes = np.cumsum(fileframes)
 
 # Limit particles if necessary
 if limit_particles == False:
@@ -119,16 +102,13 @@ else:
     particles = fparticles
     limit_particles = False
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Print basic properties shared across the files
-print("#nset: %d" %total_frames)
+print("#nset: %d" %fileframes[-1])
 print("#N: %d" %particles)
 print("#timestep: %f" %timestep)
 
 # Number of frames to analyze
-n_frames = total_frames - start
+n_frames = fileframes[-1] - start
 
 # Largest possible offset between samples
 max_offset = n_frames - 1
