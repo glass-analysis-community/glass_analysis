@@ -458,7 +458,7 @@ def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
   if wtype == wtypes.theta:
     np.less((xa1 - xa0)**2 +
             (ya1 - ya0)**2 +
-            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, astype=False)
+            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, copy=False)
   elif wtype == wtypes.gauss:
     np.exp(-((xa1 - xa0)**2 +
              (ya1 - ya0)**2 +
