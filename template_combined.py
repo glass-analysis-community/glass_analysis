@@ -169,7 +169,7 @@ if progtype == progtypes.flenner:
   n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=int)
+  samples = np.empty(n_samples, dtype=np.int64)
 
   # Efficiently fill the array
   samples[0] = 0
@@ -213,30 +213,30 @@ y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
 # Center of mass of each frame
-cm = np.empty((n_runs, n_frames, 3), dtype=float)
+cm = np.empty((n_runs, n_frames, 3), dtype=np.float64)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_samples, dtype=float)
+msd = np.zeros(n_samples, dtype=np.float64)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_samples, dtype=float)
+overlap = np.zeros(n_samples, dtype=np.float64)
 
 # Result of scattering function for each difference in times. In last
 # dimension, first three indexes are x, y, and z, and last index is
 # average between them.
-fc = np.zeros((n_samples, 4), dtype=float)
+fc = np.zeros((n_samples, 4), dtype=np.float64)
 
 # Corresponding quantities for individual runs
-run_msd = np.empty(n_samples, dtype=float)
-run_overlap = np.empty(n_samples, dtype=float)
-run_fc = np.empty((n_samples, 4), dtype=float)
+run_msd = np.empty(n_samples, dtype=np.float64)
+run_overlap = np.empty(n_samples, dtype=np.float64)
+run_fc = np.empty((n_samples, 4), dtype=np.float64)
 
 if rundirs == True:
   # Corresponding arrays used for calculating standard deviations
   # across runs
-  std_msd = np.zeros(n_samples, dtype=float)
-  std_overlap = np.zeros(n_samples, dtype=float)
-  std_fc = np.zeros((n_samples, 4), dtype=float)
+  std_msd = np.zeros(n_samples, dtype=np.float64)
+  std_overlap = np.zeros(n_samples, dtype=np.float64)
+  std_fc = np.zeros((n_samples, 4), dtype=np.float64)
 
 # Normalization factor for scattering indices
 norm = np.zeros(n_samples, dtype=np.int64)
