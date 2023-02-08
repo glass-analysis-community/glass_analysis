@@ -84,9 +84,6 @@ if geom_num == None:
 # Open trajectory files
 dcdfiles, fileframes, fparticles, timestep, tbsaves = lib.opentraj.opentraj(n_files, "short", m_start, False)
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Limit particles if necessary
 if limit_particles == False:
   particles = fparticles

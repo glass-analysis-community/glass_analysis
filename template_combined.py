@@ -114,9 +114,6 @@ else:
   dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj(n_files, "traj", 1, True)
   dcdfiles = list((dcdfiles, ))
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Limit particles if necessary
 if limit_particles == False:
   particles = fparticles

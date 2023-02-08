@@ -89,9 +89,6 @@ short_dcdfiles, short_fileframes, fparticles, timestep, tbsaves = lib.opentraj.o
 dcdfiles += short_dcdfiles
 fileframes = np.append(fileframes, short_fileframes[1:])
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Limit particles if necessary
 if limit_particles == False:
   particles = fparticles

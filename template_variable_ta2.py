@@ -135,9 +135,6 @@ if n_runs <= 1:
 # Open trajectory files
 dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Limit particles if necessary
 if particle_limit == None:
   particles = fparticles

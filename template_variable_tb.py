@@ -110,9 +110,6 @@ if box_size_defined == False:
 # Open trajectory files
 dcdfiles, fileframes, particles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
 
-# Now holds total index of last frame in each file
-fileframes = np.cumsum(fileframes)
-
 # Print basic properties shared across the files
 print("#nset: %d" %fileframes[-1])
 print("#N: %d" %particles)

@@ -4,10 +4,10 @@ import pydcd
 def opentraj(n, name, n_start, same_tbsave):
   """
   Open a set of trajectory files, running consistency checks. Returns
-  a list of dcd file objects, an array with the number of frames in
-  each trajectory, number of particles in file, timestep, and tbsave.
-  If same_tbsave is false, a tbsave array is returned instead of a
-  single tbsave value.
+  a list of dcd file objects, an array with the cumulative number of
+  frames in each trajectory, number of particles in file, timestep,
+  and tbsave. If same_tbsave is false, a tbsave array is returned
+  instead of a single tbsave value.
   n - Number of trajectory files
   name - Prefix of name of each DCD file
   n_start -- Index on which trajectory file numbering starts
@@ -61,6 +61,9 @@ def opentraj(n, name, n_start, same_tbsave):
 
     fileframes[i + 1] = dcdfiles[i].nset
 
+  # Change to hold total index of last frame in each file
+  fileframes = np.cumsum(fileframes)
+
   if same_tbsave == True:
     return dcdfiles, fileframes, fparticles, timestep, tbsave
   else:
@@ -70,9 +73,9 @@ def opentraj_multirun(r, runname, n, name, n_start, same_tbsave):
   """
   Open a set of trajectory files in multiple runs, running consistency
   checks. Returns a 2D list of dcd file objects, an array with the
-  number of frames in each trajectory, number of particles in file,
-  timestep, and tbsave. If same_tbsave is false, a tbsave array is
-  returned instead of a single tbsave value.
+  cumulative number of frames in each trajectory, number of particles
+  in file, timestep, and tbsave. If same_tbsave is false, a tbsave
+  array is returned instead of a single tbsave value.
   r - Number of runs
   runname - Prefix of name of each run directory
   n - Number of trajectory files
