@@ -510,6 +510,7 @@ s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.va
 s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
 
 print("#dt = %d" %framediff)
+print("#n_lags = %d" %n_lags)
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 

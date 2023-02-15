@@ -368,6 +368,7 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
 
 print("#dt = %d" %framediff)
+print("#n_lags = %d" %n_lags)
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 

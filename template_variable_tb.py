@@ -278,6 +278,7 @@ for i in np.arange(0, n_frames, framediff):
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
 
 print("#dt = %f" %framediff)
+print("#n_samples = %d" %n_samples)
 
 if wtype == wtypes.theta:
   print("#w function type: Threshold")

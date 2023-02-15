@@ -405,6 +405,7 @@ for i in range(0, n_init):
   print("Processed frame %d" %(start + framediff * i + 1), file=sys.stderr)
 
 print("#dt = %d" %framediff)
+print("#n_lags = %d" %n_lags)
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 
