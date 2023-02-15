@@ -185,11 +185,6 @@ a_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float
 b_bins = np.zeros((2 * n_init - 1, size_fft, size_fft, size_fft), dtype=np.float64)
 self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
-# Accumulator of summed w values for each frame, used for computing
-# second 0 vector term of s4 (term_0_2).
-a_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
-b_accum = np.zeros(2 * n_init - 1, dtype=np.float64)
-
 # Accumulates squared values of structure factor component across runs.
 ab_accum = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
@@ -322,9 +317,6 @@ for i in range(0, n_runs):
       # Bin values for FFT
       a_bins[j], dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
 
-      # Accumulate for second term of variance
-      a_accum[j] += np.sum(w[0])
-
     if root - tc >= 0 and root + tb < n_frames:
       # Calculate w values for t3 and t4
       calculate_w(w[0], i, x0, y0, z0, x2, y2, z2, j, ttypes.t3, ttypes.t4)
@@ -338,9 +330,6 @@ for i in range(0, n_runs):
       # Bin values for FFT
       b_bins[j], dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
 
-      # Accumulate for second term of variance
-      b_accum[j] += np.sum(w[0])
-
   # Calculate correlations of first point sums with second point sums.
   # This will later be normalized for number of terms corresponding to
   # each correlation offset. Last spatial axis is halved due to use of
@@ -353,15 +342,6 @@ for i in range(0, n_runs):
 
 # Normalize total S4 values across runs
 s4[stypes.total.value] /= n_runs
-
-# Normalize second term of variance across runs
-a_accum /= n_runs
-b_accum /= n_runs
-
-# Used with 0 vector for calculating second term of variance. This will
-# later be normalized for number of terms corresponding to each
-# correlation offset. a_accum must be conjugated for the correlation.
-term_0_2 = fft.fftshift(fft.irfft(np.conjugate(fft.rfft(a_accum)) * fft.rfft(b_accum), n=a_accum.size).real)[n_init-1+(max_neg_lag//framediff):n_init+(max_pos_lag//framediff)] / particles
 
 # Self S4 calculation
 
@@ -423,10 +403,6 @@ for i in range(0, n_init):
     norm[index] += 1
 
   print("Processed frame %d" %(start + framediff * i + 1), file=sys.stderr)
-
-# Subtract second term of variance from 0 vector terms
-s4[stypes.total.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2
-s4[stypes.self.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2 / particles
 
 print("#dt = %d" %framediff)
 print("#t_b = %d" %tb)

@@ -204,10 +204,6 @@ a2_accum = np.empty((2, n_q, 3), dtype=np.float64)
 # used for q=0.0 and for total structure factor.
 a_accum = np.empty(3, dtype=np.float64)
 
-# Special case accumulator of w values across runs, needed for
-# combination of q=0.0 and self structure factor.
-a_accum_s = np.empty(particles, dtype=np.float64)
-
 # Iterate over starting points for structure factor
 for i in np.arange(0, n_frames, framediff):
   # Iterate over ending points for structure factor and add to
@@ -220,7 +216,6 @@ for i in np.arange(0, n_frames, framediff):
     # Clear run accumulators.
     a2_accum[:] = 0.0
     a_accum[:] = 0.0
-    a_accum_s[:] = 0.0
 
     # Iterate over files
     for k in range(0, n_runs):
@@ -267,27 +262,14 @@ for i in np.arange(0, n_frames, framediff):
         a2_accum[stypes.self.value][qindex][1] += np.sum((w * np.cos(q * y))**2)
         a2_accum[stypes.self.value][qindex][2] += np.sum((w * np.cos(q * z))**2)
 
-        # Accumulate for second term of variance calculation for q=0.0
-        if qindex == 0:
-          a_accum_s += w
-
     # Normalize accumulators by number of runs to obtain expectation
     # values
     a2_accum /= n_runs
-    a_accum_s /= n_runs
 
     # Calculate the variance for the current index and add it to the
     # accumulator entry corresponding to the value of t_b
     variance[stypes.total.value][index] += a2_accum[stypes.total.value] / particles
     variance[stypes.self.value][index] += a2_accum[stypes.self.value] / particles
-
-    # Case for q=0.0, where w value of each particle (stored in
-    # a_accum_s) must be used in order to find the term to subtract to
-    # find the variance. The summing cannot be done inside the run
-    # loop, as averaging over runs must be done before multiplication
-    # of terms.
-    variance[stypes.total.value][index][0] -= (np.sum(a_accum_s)**2) / particles
-    variance[stypes.self.value][index][0] -= np.sum(a_accum_s**2) / particles
 
     # Accumulate the normalization value for this sample offset, which
     # we will use later in computing the mean value for each t_b

@@ -326,12 +326,6 @@ if ta != 0 or tc != 0:
 if ta - tc != 0:
   self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
-# Accumulator of summed w values for each frame, used for computing
-# second 0 vector term of s4 (term_0_2).
-a_accum = np.zeros(n_samples, dtype=np.float64)
-if ta != 0 or tc != 0:
-  b_accum = np.zeros(n_samples, dtype=np.float64)
-
 # Temporary value for each run to allow for calculation of each run's
 # self component of s4
 if tc - ta == 0:
@@ -422,7 +416,7 @@ def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
                     (ya1 - ya0)**2 +
                     (za1 - za0)**2)/sscale, out=wa)
 
-# S4 calcuation
+# S4 calculation
 
 print("Entering S4 calculation", file=sys.stderr)
 
@@ -496,11 +490,6 @@ for i in np.arange(0, n_runs):
         # Uses np.abs(), which calculates norm of complex numbers
         run_total_s4[index] += fft.fftshift(np.abs(fft.rfftn(a_bins))**2, axes=(0, 1)) / particles
 
-      # Accumulate values for second term of variance
-      a_accum[index] += np.sum(w[0])
-      if ta != 0 or tc != 0:
-        b_accum[index] += np.sum(w[1])
-
       # Multiply w values for different intervals together for self
       # bins
       if ta != 0 or tc != 0:
@@ -554,24 +543,6 @@ s4 /= n_runs
 s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
 s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
 s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
-
-# Normalize second term of variance across runs and for initial times
-a_accum /= n_runs * norm
-if ta != 0 or tc != 0:
-  b_accum /= n_runs * norm
-
-# Used with 0 vector for calculating second term of variance. This will
-# later be normalized for number of terms corresponding to each
-# correlation offset. a_accum must be conjugated for the correlation.
-if ta == 0 and tc == 0:
-  term_0_2 = a_accum**2 / particles
-else:
-  term_0_2 = a_accum * b_accum / particles
-
-# Subtract second term of variance from 0 vector terms
-s4[stypes.total.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2
-s4[stypes.self.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2 / particles
-s4[stypes.distinct.value][:, size_fft // 2, size_fft // 2, 0] -= term_0_2 * (particles - 1) / particles
 
 print("#dt = %d" %framediff)
 print("#t_a = %d" %ta)

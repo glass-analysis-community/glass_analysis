@@ -271,12 +271,6 @@ for i in range(0, n_frames):
 # third is spatial dimension.
 ab_accum = np.empty((2, n_q, 3), dtype=np.float64)
 
-# Special case accumulator of w values across runs, needed for
-# combination of q=0.0 and self part. Only real values are ever
-# accumulated to these, so they can be float.
-a_accum_s = 0.0
-b_accum_s = 0.0
-
 def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, index1, index2):
   # Get values for start of w function
   which_file = np.searchsorted(fileframes, index1, side="right") - 1
@@ -333,8 +327,6 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
 
     # Clear run accumulators.
     ab_accum[:] = 0.0
-    a_accum_s = 0.0
-    b_accum_s = 0.0
 
     # Iterate over files
     for k in range(0, n_runs):
@@ -360,26 +352,14 @@ for i in np.arange(0, n_frames - (tb - tc), framediff):
         ab_accum[stypes.self.value][qindex][1] += np.sum(w[0] * w[1] * np.cos(q * (y0 - y2)))
         ab_accum[stypes.self.value][qindex][2] += np.sum(w[0] * w[1] * np.cos(q * (z0 - z2)))
 
-        if qindex == 0:
-          a_accum_s += np.sum(w[0])
-          b_accum_s += np.sum(w[1])
-
     # Normalize accumulators by number of runs to obtain expectation
     # values
     ab_accum /= n_runs
-    a_accum_s /= n_runs
-    b_accum_s /= n_runs
 
     # Calculate the variance for the current index and add it to the
     # accumulator entry corresponding to the value of t_b
     s4[stypes.total.value][index] += ab_accum[stypes.total.value] / particles
     s4[stypes.self.value][index] += ab_accum[stypes.self.value] / particles
-
-    # Case for q=0.0, where w value of each particle (stored in
-    # a_accum_s) must be used in order to find the term to subtract to
-    # find the variance.
-    s4[stypes.total.value][index][0] -= (a_accum_s * b_accum_s) / particles
-    s4[stypes.self.value][index][0] -= (a_accum_s * b_accum_s) / particles**2
 
     # Accumulate the normalization value for this lag value, which
     # we will use later in computing the mean value for each t_b
