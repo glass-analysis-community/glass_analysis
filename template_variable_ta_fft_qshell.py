@@ -15,6 +15,8 @@ def usage():
         "-r Number of runs, numbered as folders",
         "-s Frame number to start on (index starts at 1)",
         "-d Spacing between initial times as well as lag values (dt)",
+        "-k Last frame number in range to use for initial times (index starts at 1)",
+        "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
         "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
         "-y Box size in each dimension (assumed to be cubic, required)",
         "-b Average interval in frames (t_b)",
@@ -33,7 +35,7 @@ def usage():
         sep="\n", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:b:c:o:p:q:v:l:ijht:u:e:")
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:x:y:b:c:o:p:q:v:l:ijht:u:e:")
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
@@ -62,10 +64,14 @@ n_stypes = len(stypes)
 
 # Total number of trajectory files
 n_files = 1
-# Total number of run folders. 0 means not specified.
+# Total number of run folders.
 n_runs = 0
 # What frame number to start on
 start = 0
+# Last frame number to use for initial times
+initend = None
+# Last frame number to use for either final or initial times
+final = None
 # Spacing between initial times (dt)
 framediff = 10
 # Limit of number of Fourier transform vector constants (including q=0)
@@ -74,7 +80,7 @@ size_fft = None
 box_size = None
 # Average length of intervals (t_b)
 tb = 1
-# Half difference between length of initial and end intervals (t_c)
+# Half difference between length of first and second intervals (t_c)
 tc = 0
 # Whether to limit analysis to subset of particles, and upper and lower
 # indices for limit.
@@ -102,6 +108,10 @@ for o, a in opts:
     n_runs = int(a)
   elif o == "-s":
     start = int(a) - 1
+  elif o == "-k":
+    initend = int(a)
+  elif o == "-m":
+    final = int(a)
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
@@ -198,15 +208,29 @@ print("#tbsave: %f" %tbsave)
 # Spatial size of individual cell for FFT
 cell = box_size / size_fft
 
-# Number of frames in each run to analyze
-n_frames = fileframes[-1] - start
+# End of set of frames to use for initial times
+if initend == None:
+  initend = fileframes[-1]
+else:
+  if initend > fileframes[-1]:
+    raise RuntimeError("End initial time frame beyond set of frames")
+
+# End of set of frames to used for both final and initial times
+if final == None:
+  final = fileframes[-1]
+else:
+  if final > fileframes[-1]:
+    raise RuntimeError("End limit time frame beyond set of frames")
+
+# Number of frames to analyze
+n_frames = final - start
 
 # Number of initial times
 n_init = (n_frames - 1 - (tb - tc)) // framediff + 1
 
 # Largest possible positive and negative lags
 max_pos_lag = ((n_frames - tb - 1) // framediff) * framediff
-max_neg_lag = -((n_frames - tb - 1 - ((n_frames - 1 - (tb - tc)) % framediff)) // framediff) * framediff
+max_neg_lag = -(((initend - start) - tb - 1 - (((initend - start) - 1 - (tb - tc)) % framediff)) // framediff) * framediff
 
 # Create evenly spaced array of lag values with same spacing as
 # initial times (framediff)
@@ -363,7 +387,7 @@ def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, i, ttype1, ttype2):
                     (ya1 - ya0)**2 +
                     (za1 - za0)**2)/sscale, out=wa)
 
-# S4 calcuation
+# S4 calculation
 
 print("Entering S4 calculation", file=sys.stderr)
 
@@ -376,7 +400,7 @@ for i in range(0, n_runs):
 
     # Total S4 calculation, uses FFT-based autocorrelation
 
-    if root + tb - tc < n_frames:
+    if root + tb - tc < initend - start:
       # Calculate w values for t1 and t2
       calculate_w(w[0], i, x0, y0, z0, x2, y2, z2, j, ttypes.t1, ttypes.t2)
 
@@ -423,7 +447,7 @@ for i in range(0, n_runs):
       if (ta < max(tc - root, -tb - root) or
           ta - n_frames >= min(tc - root, -tb - root) or
           root < (tc - tb) or
-          root - n_frames >= (tc - tb)):
+          root - (initend - start) >= (tc - tb)):
         continue
 
       # Calculate w values for t3 and t4 (again for each interval end)

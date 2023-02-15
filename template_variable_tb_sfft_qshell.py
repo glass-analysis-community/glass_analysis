@@ -11,19 +11,19 @@ import lib.opentraj
 
 def usage():
   print("Arguments:",
-        "-n Number of files",
+        "-n Number of files in each run",
         "-r Number of runs, numbered as folders",
         "-s Frame number to start on (index starts at 1)",
         "-k Last frame number in range to use for initial times (index starts at 1)",
         "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
         "-d Number of frames between starts of pairs to average (dt)",
-        "-x Number of Fourier transform vector constants to used in addition to q=0",
+        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
         "-y Box size in each dimension (assumed to be cubic, required)"
         "-a Offset between centers of begginning and end intervals in frames (t_a)",
         "-c Difference between intervals in frames (t_c)",
         "-o Start index (from 1) of particles to limit analysis to",
         "-p End index (from 1) of particles to limit analysis to",
-        "-q Upper boundary for first q region with distinct q values",
+        "-q Upper boundary for first q region with discrete q values",
         "-v Upper boundary for second q region divided into onion shells",
         "-l Number of onion shells to use in second q region",
         "-i Write output to files, one for each t_b",
@@ -64,8 +64,7 @@ n_stypes = len(stypes)
 
 # Total number of trajectory files
 n_files = 1
-# Total number of run folders. If not specified, this is being run in
-# directory with trajectory files.
+# Total number of run folders.
 n_runs = 0
 # What frame number to start on
 start = 0
@@ -81,7 +80,7 @@ size_fft = None
 box_size = None
 # Offset between centers of beginning and end intervals (t_a)
 ta = 0
-# Difference between length of start and end intervals (t_c)
+# Half difference between length of first and second intervals (t_c)
 tc = 0
 # Whether to limit analysis to subset of particles, and upper and lower
 # indices for limit.
