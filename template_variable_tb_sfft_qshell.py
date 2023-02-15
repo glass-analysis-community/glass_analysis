@@ -291,8 +291,8 @@ x0m = np.empty(particles, dtype=np.single)
 y0m = np.empty(particles, dtype=np.single)
 z0m = np.empty(particles, dtype=np.single)
 
-# Used when two separate intervals are used for covariance in S4
-if ta != 0 or tc != 0:
+# Used when interval start times are different
+if ta - tc != 0:
   x2 = np.empty(particles, dtype=np.single)
   y2 = np.empty(particles, dtype=np.single)
   z2 = np.empty(particles, dtype=np.single)
@@ -331,21 +331,18 @@ if ta - tc != 0:
 if tc - ta == 0:
   # If start frames of intervals are the same, then the self s4 values
   # do not vary with q
-  run_self_s4 = np.empty((n_samples, 1, 1, 1), dtype=np.float64)
+  run_self_s4 = np.empty((1, 1, 1), dtype=np.float64)
 else:
-  run_self_s4 = np.empty((n_samples, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
+  run_self_s4 = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Temporary value for each run to allow for calculation of each run's
 # total component of s4
-run_total_s4 = np.empty((n_samples, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
+run_total_s4 = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Structure factor variance for each interval width. The first and
 # second fft dimensions include values for negative vectors. Since all
 # inputs are real, this is not required for the third fft dimension.
-s4 = np.zeros((n_stypes, n_samples, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
-
-# Normalization factor for structure factor variance indices
-norm = np.zeros(n_samples, dtype=np.int64)
+s4 = np.empty((n_stypes, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # W function values for each particle
 if ta == 0 and tc == 0:
@@ -379,170 +376,6 @@ for i in range(0, n_runs):
       cm[i][j][0] = np.mean(x0)
       cm[i][j][1] = np.mean(y0)
       cm[i][j][2] = np.mean(z0)
-
-# Read values for a given frame and run from DCD file, correcting for
-# frame center of mass
-def get_frame(t0, xb0, yb0, zb0, run):
-  which_file = np.searchsorted(fileframes, start + t0, side="right") - 1
-  offset = start + t0 - fileframes[which_file]
-  if limit_particles == True:
-    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xb0[:] = x[lower_limit:upper_limit]
-    yb0[:] = y[lower_limit:upper_limit]
-    zb0[:] = z[lower_limit:upper_limit]
-  else:
-    dcdfiles[run][which_file].gdcdp(xb0, yb0, zb0, offset)
-
-  # Correct for center of mass
-  xb0 -= cm[run][t0][0]
-  yb0 -= cm[run][t0][1]
-  zb0 -= cm[run][t0][2]
-
-# Get end frame values and calculate w, do not modify start frame
-# values
-def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
-  get_frame(t1, xa1, ya1, za1, run)
-
-  if wtype == wtypes.theta:
-    np.less((xa1 - xa0)**2 +
-            (ya1 - ya0)**2 +
-            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, copy=False)
-  elif wtype == wtypes.gauss:
-    np.exp(-((xa1 - xa0)**2 +
-             (ya1 - ya0)**2 +
-             (za1 - za0)**2)/(2 * gscale**2), out=wa)
-  elif wtype == wtypes.exp:
-    np.exp(-np.sqrt((xa1 - xa0)**2 +
-                    (ya1 - ya0)**2 +
-                    (za1 - za0)**2)/sscale, out=wa)
-
-# S4 calculation
-
-print("Entering S4 calculation", file=sys.stderr)
-
-# Iterate over runs (FFT will be averaged over runs)
-for i in np.arange(0, n_runs):
-  # Clear accumulators
-  run_self_s4[:, :, :, :] = 0.0
-  run_total_s4[:, :, :, :] = 0.0
-
-  # Iterate over starting points for structure factor
-  for j in np.arange(0, initend - start, framediff):
-    if ta < (tc - j) or ta - n_frames >= (tc - j):
-      continue
-
-    # Get starting frame for first interval and store in x0, y0, z0
-    get_frame(j, x0, y0, z0, i)
-
-    # Wrap coordinates to box size for binning
-    x0m[:] = x0 % box_size
-    y0m[:] = y0 % box_size
-    z0m[:] = z0 % box_size
-
-    # If needed, get starting frame for second interval and store in
-    # x2, y2, z2
-    if ta - tc != 0:
-      get_frame(j + ta - tc, x2, y2, z2, i)
-
-      # Wrap coordinates to box size for binning
-      x2m[:] = x2 % box_size
-      y2m[:] = y2 % box_size
-      z2m[:] = z2 % box_size
-
-    # If needed, find differences between particle positions in
-    # starting frames
-    if ta - tc != 0:
-      xdiff[:] = (((x0 // cell) - (x2 // cell) + 0.5) * cell) % box_size
-      ydiff[:] = (((y0 // cell) - (y2 // cell) + 0.5) * cell) % box_size
-      zdiff[:] = (((z0 // cell) - (z2 // cell) + 0.5) * cell) % box_size
-
-    # Iterate over ending points for structure factor and add to
-    # accumulated structure factor, making sure to only use indices
-    # which are within the range of the files.
-    for index, tb in enumerate(samples):
-      if (ta < (-tb - j) or
-          ta - n_frames >= (-tb - j) or
-          j < (tc - tb) or
-          j - n_frames >= (tc - tb)):
-        continue
-
-      # Calculate w values for first interval
-      calculate_w(w[0], x0, y0, z0, j + tb - tc, x1, y1, z1, i)
-
-      # Calculate w values for second interval if needed
-      if ta != 0 or tc != 0:
-        calculate_w(w[1], x2, y2, z2, j + ta + tb, x1, y1, z1, i)
-
-      # Sort first interval w values into bins for FFT
-      a_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
-
-      # Sort second interval w values into bins for FFT if needed
-      if ta != 0 or tc != 0:
-        if ta - tc == 0:
-          b_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
-        else:
-          b_bins, dummy = np.histogramdd((x2m, y2m, z2m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
-
-      # Calculate total part of S4
-      if ta != 0 or tc != 0:
-        run_total_s4[index] += fft.fftshift((fft.rfftn(a_bins) * np.conjugate(fft.rfftn(b_bins))).real, axes=(0, 1)) / particles
-      else:
-        # Uses np.abs(), which calculates norm of complex numbers
-        run_total_s4[index] += fft.fftshift(np.abs(fft.rfftn(a_bins))**2, axes=(0, 1)) / particles
-
-      # Multiply w values for different intervals together for self
-      # bins
-      if ta != 0 or tc != 0:
-        w[0] *= w[1]
-      else:
-        # Squaring not required if w is same for each interval and is
-        # boolean values, as 1*1 = 1 and 0*0 = 0
-        if wtype != wtypes.theta:
-          w[0] *= w[0]
-
-      # Calculate self part
-      if ta - tc != 0:
-        # Bin multiplied w values according to coordinate differences
-        self_bins, dummy = np.histogramdd((xdiff, ydiff, zdiff), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
-
-        # Perform FFT, thereby calculating self S4 for current index
-        run_self_s4[index] += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / particles
-      else:
-        run_self_s4[index][0][0][0] += np.sum(w[0]) / particles
-
-      # Accumulate the normalization value for this sample value, which
-      # we will use later in computing the mean value for each t_b
-      if i == 0:
-        norm[index] += 1
-
-    print("Processed frame %d in run %d" %(start + j + 1, i + 1), file=sys.stderr)
-
-  # Normalize the accumulated values, thereby obtaining averages over
-  # each pair of frames
-  run_total_s4 /= norm.reshape((n_samples, 1, 1, 1))
-  run_self_s4 /= norm.reshape((n_samples, 1, 1, 1))
-
-  # Calculate distinct part of S4 for current run
-  run_distinct_s4 = run_total_s4 - run_self_s4
-
-  # Accumulate total, self, and distinct averages for run
-  s4[stypes.total.value] += run_total_s4
-  s4[stypes.self.value] += run_self_s4
-  s4[stypes.distinct.value] += run_distinct_s4
-
-  # Accumulate squares of total, self, and distinct averages for run,
-  # holding variances for eventual calculation of standard deviation
-  s4[stypes.totalstd.value] += run_total_s4**2
-  s4[stypes.selfstd.value] += run_self_s4**2
-  s4[stypes.distinctstd.value] += run_distinct_s4**2
-
-# Normalize S4 values across runs
-s4 /= n_runs
-
-# Calculate standard deviations from normalized variances over runs
-s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
-s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
-s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
 
 print("#dt = %d" %framediff)
 print("#n_samples = %d" %n_samples)
@@ -640,18 +473,190 @@ for i in range(qb2l, qb2u + 1):
 qaccum_discrete = np.empty((n_stypes, len(qlist_discrete_sorted)), dtype=np.float64)
 qaccum_shells = np.empty((n_stypes, len(qlist_shells)), dtype=np.float64)
 
-for i in range(0, n_samples):
-  time_tb = samples[i] * timestep * tbsave
+# Read values for a given frame and run from DCD file, correcting for
+# frame center of mass
+def get_frame(t0, xb0, yb0, zb0, run):
+  which_file = np.searchsorted(fileframes, start + t0, side="right") - 1
+  offset = start + t0 - fileframes[which_file]
+  if limit_particles == True:
+    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
+    xb0[:] = x[lower_limit:upper_limit]
+    yb0[:] = y[lower_limit:upper_limit]
+    zb0[:] = z[lower_limit:upper_limit]
+  else:
+    dcdfiles[run][which_file].gdcdp(xb0, yb0, zb0, offset)
+
+  # Correct for center of mass
+  xb0 -= cm[run][t0][0]
+  yb0 -= cm[run][t0][1]
+  zb0 -= cm[run][t0][2]
+
+# Get end frame values and calculate w, do not modify start frame
+# values
+def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
+  get_frame(t1, xa1, ya1, za1, run)
+
+  if wtype == wtypes.theta:
+    np.less((xa1 - xa0)**2 +
+            (ya1 - ya0)**2 +
+            (za1 - za0)**2, radius**2, out=wa).astype(np.int8, copy=False)
+  elif wtype == wtypes.gauss:
+    np.exp(-((xa1 - xa0)**2 +
+             (ya1 - ya0)**2 +
+             (za1 - za0)**2)/(2 * gscale**2), out=wa)
+  elif wtype == wtypes.exp:
+    np.exp(-np.sqrt((xa1 - xa0)**2 +
+                    (ya1 - ya0)**2 +
+                    (za1 - za0)**2)/sscale, out=wa)
+
+# S4 calculation
+
+print("Entering S4 calculation", file=sys.stderr)
+
+# Iterate over average interval lengths (t_b)
+for index, tb in enumerate(samples):
+  # Clear interval accumulator
+  s4[:, :, :, :] = 0.0
+
+  # Normalization factor for number of sets contributing to value for
+  # t_b
+  norm = 0.0
+
+  # Iterate over runs (FFT will be averaged over runs)
+  for i in np.arange(0, n_runs):
+    # Clear run accumulators
+    run_self_s4[:, :, :] = 0.0
+    run_total_s4[:, :, :] = 0.0
+
+    # Iterate over starting points for structure factor
+    for j in np.arange(0, initend - start, framediff):
+      # Use only indices that are within range
+      if (ta < (tc - j) or
+          ta - n_frames >= (tc - j) or
+          ta < (-tb - j) or
+          ta - n_frames >= (-tb - j) or
+          j < (tc - tb) or
+          j - n_frames >= (tc - tb)):
+        continue
+
+      # Get starting frame for first interval and store in x0, y0, z0
+      get_frame(j, x0, y0, z0, i)
+
+      # Wrap coordinates to box size for binning
+      x0m[:] = x0 % box_size
+      y0m[:] = y0 % box_size
+      z0m[:] = z0 % box_size
+
+      # If needed, get starting frame for second interval and store in
+      # x2, y2, z2
+      if ta - tc != 0:
+        get_frame(j + ta - tc, x2, y2, z2, i)
+
+        # Wrap coordinates to box size for binning
+        x2m[:] = x2 % box_size
+        y2m[:] = y2 % box_size
+        z2m[:] = z2 % box_size
+
+      # If needed, find differences between particle positions in
+      # starting frames
+      if ta - tc != 0:
+        xdiff[:] = (((x0 // cell) - (x2 // cell) + 0.5) * cell) % box_size
+        ydiff[:] = (((y0 // cell) - (y2 // cell) + 0.5) * cell) % box_size
+        zdiff[:] = (((z0 // cell) - (z2 // cell) + 0.5) * cell) % box_size
+
+      # Calculate w values for first interval
+      calculate_w(w[0], x0, y0, z0, j + tb - tc, x1, y1, z1, i)
+
+      # Calculate w values for second interval if needed
+      if ta != 0 or tc != 0:
+        if ta - tc != 0:
+          calculate_w(w[1], x2, y2, z2, j + ta + tb, x1, y1, z1, i)
+        else:
+          calculate_w(w[1], x0, y0, z0, j + ta + tb, x1, y1, z1, i)
+
+      # Sort first interval w values into bins for FFT
+      a_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
+
+      # Sort second interval w values into bins for FFT if needed
+      if ta != 0 or tc != 0:
+        if ta - tc == 0:
+          b_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+        else:
+          b_bins, dummy = np.histogramdd((x2m, y2m, z2m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+
+      # Calculate total part of S4
+      if ta != 0 or tc != 0:
+        run_total_s4 += fft.fftshift((fft.rfftn(a_bins) * np.conjugate(fft.rfftn(b_bins))).real, axes=(0, 1)) / particles
+      else:
+        # Uses np.abs(), which calculates norm of complex numbers
+        run_total_s4 += fft.fftshift(np.abs(fft.rfftn(a_bins))**2, axes=(0, 1)) / particles
+
+      # Multiply w values for different intervals together for self
+      # bins
+      if ta != 0 or tc != 0:
+        w[0] *= w[1]
+      else:
+        # Squaring not required if w is same for each interval and is
+        # boolean values, as 1*1 = 1 and 0*0 = 0
+        if wtype != wtypes.theta:
+          w[0] *= w[0]
+
+      # Calculate self part
+      if ta - tc != 0:
+        # Bin multiplied w values according to coordinate differences
+        self_bins, dummy = np.histogramdd((xdiff, ydiff, zdiff), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
+
+        # Perform FFT, thereby calculating self S4 for current index
+        run_self_s4 += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / particles
+      else:
+        run_self_s4[0][0][0] += np.sum(w[0]) / particles
+
+      # Accumulate the normalization value for this sample value, which
+      # we will use later in computing the mean value for each t_b
+      if i == 0:
+        norm += 1
+
+    # Calculate distinct part of S4 for current run
+    run_distinct_s4 = run_total_s4 - run_self_s4
+
+    # Normalize the accumulated values, thereby obtaining averages over
+    # each pair of frames
+    run_total_s4 /= norm
+    run_self_s4 /= norm
+    run_distinct_s4 /= norm
+
+    # Accumulate total, self, and distinct averages for run
+    s4[stypes.total.value] += run_total_s4
+    s4[stypes.self.value] += run_self_s4
+    s4[stypes.distinct.value] += run_distinct_s4
+
+    # Accumulate squares of total, self, and distinct averages for run,
+    # holding variances for eventual calculation of standard deviation
+    s4[stypes.totalstd.value] += run_total_s4**2
+    s4[stypes.selfstd.value] += run_self_s4**2
+    s4[stypes.distinctstd.value] += run_distinct_s4**2
+
+  # Normalize S4 values across runs
+  s4 /= n_runs
+
+  # Calculate standard deviations from normalized variances over runs
+  s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
+  s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
+  s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
+
+  # Print results for current t_b
+
+  time_tb = tb * timestep * tbsave
 
   # File to write data for time to
   if dumpfiles == True:
-    file = open("tb_%f" %(samples[i]), "w")
+    file = open("tb_%f" %(tb), "w")
   else:
     file = sys.stdout
 
   # Clear accumulators
-  qaccum_discrete[:][:] = 0.0
-  qaccum_shells[:][:] = 0.0
+  qaccum_discrete[:, :] = 0.0
+  qaccum_shells[:, :] = 0.0
 
   for j in range(qb2l, qb2u + 1):
     for k in range(qb2l, qb2u + 1):
@@ -663,10 +668,10 @@ for i in range(0, n_samples):
         # qlist_discrete_sorted or qlist_shells
         if element_qs[j - qb2l][k - qb2l][l][0] == 0:
           # Accumulate values to corresponding q value
-          qaccum_discrete[:, element_qs[j - qb2l][k - qb2l][l][1]] += s4[:, i, (size_fft//2)+j, (size_fft//2)+k, l]
+          qaccum_discrete[:, element_qs[j - qb2l][k - qb2l][l][1]] += s4[:, (size_fft//2)+j, (size_fft//2)+k, l]
         if element_qs[j - qb2l][k - qb2l][l][0] == 1:
           # Accumulate values to corresponding q value
-          qaccum_shells[:, element_qs[j - qb2l][k - qb2l][l][1]] += s4[:, i, (size_fft//2)+j, (size_fft//2)+k, l]
+          qaccum_shells[:, element_qs[j - qb2l][k - qb2l][l][1]] += s4[:, (size_fft//2)+j, (size_fft//2)+k, l]
 
   # Normalize q values for number of contributing elements
   qaccum_discrete /= qnorm_discrete_sorted
@@ -687,8 +692,8 @@ for i in range(0, n_samples):
                                                       qaccum_discrete[stypes.totalstd.value][j],
                                                       qaccum_discrete[stypes.selfstd.value][j],
                                                       qaccum_discrete[stypes.distinctstd.value][j],
-                                                      norm[i],
-                                                      samples[i]))
+                                                      norm,
+                                                      tb))
 
   # For each shell, print t_b, midpoint of q value range of fft
   # frequency, number of FFT matrix elements contributing to q value,
@@ -705,8 +710,8 @@ for i in range(0, n_samples):
                                                       qaccum_shells[stypes.totalstd.value][j],
                                                       qaccum_shells[stypes.selfstd.value][j],
                                                       qaccum_shells[stypes.distinctstd.value][j],
-                                                      norm[i],
-                                                      samples[i]))
+                                                      norm,
+                                                      tb))
 
   # Close file if opened
   if dumpfiles == True:
