@@ -301,9 +301,9 @@ for i in range(0, n_runs):
                                 ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2)
 
       # Add overlap value to accumulated value
-      run_overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
-                                                    ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
-                                                    ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2), radius).astype(int))
+      run_overlap[index] += np.mean(np.less(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
+                                            ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
+                                            ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2, radius**2).astype(int))
 
       # Get means of scattering functions of all the particles for each
       # coordinate

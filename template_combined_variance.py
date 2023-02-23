@@ -215,9 +215,9 @@ for i in np.arange(0, n_frames, framediff):
       msd_a2_accum += msd_run**2
 
       # Add overlap value to accumulated value
-      overlap_run = np.mean(np.less(np.sqrt(((x1 - cm[k][i + j][0]) - (x - cm[k][i][0]))**2 +
-                                            ((y1 - cm[k][i + j][1]) - (y - cm[k][i][1]))**2 +
-                                            ((z1 - cm[k][i + j][2]) - (z - cm[k][i][2]))**2), radius).astype(np.int8, copy=False))
+      overlap_run = np.mean(np.less(((x1 - cm[k][i + j][0]) - (x - cm[k][i][0]))**2 +
+                                    ((y1 - cm[k][i + j][1]) - (y - cm[k][i][1]))**2 +
+                                    ((z1 - cm[k][i + j][2]) - (z - cm[k][i][2]))**2, radius**2).astype(np.int8, copy=False))
 
       overlap_a_accum += overlap_run
       overlap_a2_accum += overlap_run**2

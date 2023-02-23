@@ -189,9 +189,9 @@ for i in initial:
                   ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2)
 
     # Compute overlap value
-    overlap = np.mean(np.less(np.sqrt(((x1 - cm[j][0]) - (x0 - cm[i][0]))**2 +
-                                      ((y1 - cm[j][1]) - (y0 - cm[i][1]))**2 +
-                                      ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2), radius).astype(np.int8, copy=False))
+    overlap = np.mean(np.less(((x1 - cm[j][0]) - (x0 - cm[i][0]))**2 +
+                              ((y1 - cm[j][1]) - (y0 - cm[i][1]))**2 +
+                              ((z1 - cm[j][2]) - (z0 - cm[i][2]))**2, radius**2).astype(np.int8, copy=False))
 
     itime = dcdfiles[i_which_file].itstart + i_offset * timestep * dcdfiles[i_which_file].tbsave
     jtime = dcdfiles[j_which_file].itstart + j_offset * timestep * dcdfiles[j_which_file].tbsave

@@ -269,9 +269,9 @@ for i in np.arange(0, n_frames, set_len):
                           ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2)
 
     # Add overlap value to accumulated value
-    overlap[index] += np.mean(np.less(np.sqrt(((x1 - cm[i + j][0]) - (x0 - cm[i][0]))**2 +
-                                              ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))**2 +
-                                              ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2), radius).astype(np.int8, copy=False))
+    overlap[index] += np.mean(np.less(((x1 - cm[i + j][0]) - (x0 - cm[i][0]))**2 +
+                                      ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))**2 +
+                                      ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2, radius**2).astype(np.int8, copy=False))
 
     # Accumulate the normalization value for this lag, which we will
     # use later in computing the mean scattering value for each offset
