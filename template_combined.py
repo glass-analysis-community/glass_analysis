@@ -357,9 +357,9 @@ if rundirs == True:
 
   # Calculate standard deviation with means and means of squares of
   # values
-  std_fc = np.sqrt((std_fc - fc**2) / (n_runs - 1))
-  std_msd = np.sqrt((std_msd - msd**2) / (n_runs - 1))
-  std_overlap = np.sqrt((std_overlap - overlap**2) / (n_runs - 1))
+  std_fc = np.sqrt(np.maximum(0.0, std_fc - fc**2) / (n_runs - 1))
+  std_msd = np.sqrt(np.maximum(0.0, std_msd - msd**2) / (n_runs - 1))
+  std_overlap = np.sqrt(np.maximum(0.0, std_overlap - overlap**2) / (n_runs - 1))
 
 print("#dt = %f" %framediff)
 print("#q = %f" %q)

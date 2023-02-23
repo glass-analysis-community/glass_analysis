@@ -641,9 +641,9 @@ for index, tb in enumerate(tbvals):
   s4 /= n_runs
 
   # Calculate standard deviations from normalized variances over runs
-  s4[stypes.totalstd.value] = np.sqrt((s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
-  s4[stypes.selfstd.value] = np.sqrt((s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
-  s4[stypes.distinctstd.value] = np.sqrt((s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
+  s4[stypes.totalstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (n_runs - 1))
+  s4[stypes.selfstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (n_runs - 1))
+  s4[stypes.distinctstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (n_runs - 1))
 
   # Print results for current t_b
 
