@@ -85,43 +85,43 @@ print("#tbsave: %f" %tbsave)
 # Number of frames to analyze
 n_frames = fileframes[-1] - start
 
-# Largest possible offset between samples
-max_offset = n_frames - 1
+# Largest possible lag
+max_lag = n_frames - 1
 
 if progtype == progtypes.flenner:
-  # Construct list of frame difference numbers for sampling according
-  # to a method of increasing spacing
+  # Construct list of lags according to a method of increasing spacing
   magnitude = -1
-  frames_beyond_magnitude = max_offset
+  frames_beyond_magnitude = max_lag
   while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
     magnitude += 1
     frames_beyond_magnitude -= 50 * 5**magnitude
 
-  samples_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
+  lags_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
 
-  n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
+  n_lags = 1 + (50 * (magnitude + 1)) + lags_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=np.int64)
+  lag = np.empty(n_lags, dtype=np.int64)
 
   # Efficiently fill the array
-  samples[0] = 0
-  last_sample_number = 0
+  lags[0] = 0
+  last_lag = 0
   for i in range(0, magnitude + 1):
-    samples[1 + 50 * i : 1 + 50 * (i + 1)] = last_sample_number + np.arange(5**i , 51 * 5**i, 5**i)
-    last_sample_number += 50 * 5**i
-  samples[1 + 50 * (magnitude + 1) : n_samples] = last_sample_number + np.arange(5**(magnitude + 1), (samples_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
+    lags[1 + 50 * i : 1 + 50 * (i + 1)] = last_lag + np.arange(5**i , 51 * 5**i, 5**i)
+    last_lag += 50 * 5**i
+  lags[1 + 50 * (magnitude + 1) : n_lags] = last_lag + np.arange(5**(magnitude + 1), (lags_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
 
 elif progtype == progtypes.geometric:
-  # Largest power of geom_base that will be able to be sampled
-  end_power = math.floor(math.log(max_offset, geom_base))
+  # Largest power of geom_base that will be able to be used as a lag
+  # value
+  end_power = math.floor(math.log(max_lag, geom_base))
 
-  # Create array of sample numbers following geometric progression,
-  # with flooring to have samples adhere to integer boundaries,
-  # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
+  # Create array of lags following geometric progression, with flooring
+  # to have lags adhere to integer boundaries, removing duplicate
+  # numbers, and prepending 0
+  lags = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
-  n_samples = samples.size
+  n_lags = lags.size
 
 # Stores coordinates of all particles in a frame
 x = np.empty(particles, dtype=np.single)
@@ -135,16 +135,16 @@ z1 = np.empty(particles, dtype=np.single)
 cm = [np.empty((n_frames, 3), dtype=np.float64)] * n_runs
 
 # Accumulated msd variance value for each difference in times
-msd = np.zeros(n_samples, dtype=np.float64)
+msd = np.zeros(n_lags, dtype=np.float64)
 
 # Accumulated overlap variance value for each difference in times
-overlap = np.zeros(n_samples, dtype=np.float64)
+overlap = np.zeros(n_lags, dtype=np.float64)
 
 # Result of scattering function variance for each difference in times
-fc = np.zeros((n_samples, 3), dtype=np.float64)
+fc = np.zeros((n_lags, 3), dtype=np.float64)
 
 # Normalization factor for scattering indices
-norm = np.zeros(n_samples, dtype=np.int64)
+norm = np.zeros(n_lags, dtype=np.int64)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -172,7 +172,7 @@ for i in np.arange(0, n_frames, framediff):
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
   # which are within the range of the files.
-  for index, j in enumerate(samples):
+  for index, j in enumerate(lags):
     if j >= (n_frames - i):
       continue
 
@@ -234,9 +234,8 @@ for i in np.arange(0, n_frames, framediff):
     msd[index] += particles * (msd_a2_accum - msd_a_accum**2)
     overlap[index] += particles * (overlap_a2_accum - overlap_a_accum**2)
 
-    # Accumulate the normalization value for this sample offset, which
-    # we will use later in computing the mean scattering value for each
-    # offset
+    # Accumulate the normalization value for this lag, which we will
+    # use later in computing the mean scattering value for each lag
     norm[index] += 1
 
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
@@ -247,7 +246,7 @@ print("#a = %f" %radius)
 
 # Normalize the accumulated scattering values, thereby obtaining
 # averages over each pair of frames
-fc /= norm.reshape((n_samples, 1))
+fc /= norm.reshape((n_lags, 1))
 
 # Normalize the overlap, thereby obtaining an average over each pair of frames
 overlap /= norm
@@ -255,9 +254,9 @@ overlap /= norm
 # Normalize the msd, thereby obtaining an average over each pair of frames
 msd /= norm
 
-for i in range(0, n_samples):
-  time = samples[i] * timestep * tbsave
+for i in range(0, n_lags):
+  time = lags[i] * timestep * tbsave
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, number of frame sets contributing to
   # such averages, and frame difference
-  print("%f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], norm[i], samples[i]))
+  print("%f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], norm[i], lags[i]))

@@ -79,7 +79,7 @@ if set_len == None:
   raise RuntimeError("Must specify a set length")
 
 if geom_num == None:
-  raise RuntimeError("Must specify number of elements in geometric sampling sequence")
+  raise RuntimeError("Must specify number of elements in geometric lag time sequence")
 
 # Open trajectory files
 dcdfiles, fileframes, fparticles, timestep, tbsaves = lib.opentraj.opentraj(n_files, "short", m_start, False)
@@ -107,16 +107,13 @@ print("#timestep: %f" %timestep)
 # Number of frames to analyze
 n_frames = fileframes[-1] - start
 
-# Largest possible offset between samples
-max_offset = n_frames - 1
-
 # Ensure frame set is long enough to work with chosen cycle
 if n_frames < 2 * set_len:
   raise RuntimeError("Trajectory set not long enough for averaging "
                      "cycle, one may use non-averaging script instead.")
 
 # Cycle of offset times
-samp_cycle = np.empty(set_len, dtype=np.int64)
+lag_cycle = np.empty(set_len, dtype=np.int64)
 which_file = np.searchsorted(fileframes, start, side="right") - 1
 offset = start - fileframes[which_file]
 t1 = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
@@ -127,18 +124,18 @@ for i in range(0, set_len):
   t1 = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
   # Store differences in iteration increments
-  samp_cycle[i] = t1 - t0
+  lag_cycle[i] = t1 - t0
 
 # Total offset of full cycle
-samp_sum = np.sum(samp_cycle)
+lag_sum = np.sum(lag_cycle)
 
 # Get time of frame 0
 which_file = np.searchsorted(fileframes, start, side="right") - 1
 offset = start - fileframes[which_file]
 zero_time = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
-# Cumulative sum of sample cycle
-samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
+# Cumulative sum of lag cycle
+lag_cycle_sum = np.insert(np.cumsum(lag_cycle), 0, 0)
 
 # Verify that iterations do indeed follow cycle
 for i in range(0, n_frames):
@@ -146,45 +143,44 @@ for i in range(0, n_frames):
   offset = start + i - fileframes[which_file]
   t = dcdfiles[which_file].itstart + offset * dcdfiles[which_file].tbsave
 
-  if t != samp_cycle_sum[i % set_len] + (i // set_len) * samp_sum + zero_time:
+  if t != lag_cycle_sum[i % set_len] + (i // set_len) * lag_sum + zero_time:
     raise RuntimeError("Frame %d in file %d does not seem to follow "
                        "specified cycle." %(offset, which_file + 1))
 
 # Shift array to put smallest step first in sequence
-shift_index = np.argmin(samp_cycle)
+shift_index = np.argmin(lag_cycle)
 start += shift_index
 n_frames -= shift_index
-samp_cycle = np.roll(samp_cycle, -shift_index)
-samp_cycle_sum = np.insert(np.cumsum(samp_cycle), 0, 0)
+lag_cycle = np.roll(lag_cycle, -shift_index)
+lag_cycle_sum = np.insert(np.cumsum(lag_cycle), 0, 0)
 
-# Holds frame number offsets from initial time to sample
-samples = np.empty(geom_num, dtype=np.int64)
+# Holds frame number lags
+lags = np.empty(geom_num, dtype=np.int64)
 
-# Base to use for geometric sequence to approximately fit full sample size
-geom_base = (samp_cycle_sum[(n_frames - 1) % set_len] + ((n_frames - 1) // set_len) * samp_sum)**(1 / geom_num)
+# Base to use for geometric sequence to approximately fit full lag size
+geom_base = (lag_cycle_sum[(n_frames - 1) % set_len] + ((n_frames - 1) // set_len) * lag_sum)**(1 / geom_num)
 
-# Create sample array to approximate geometric sequence
+# Create lag array to approximate geometric sequence
 for i in range(0, geom_num):
-  # Geometric sequence value to find closest sample value to
+  # Geometric sequence value to find closest lag value to
   target = geom_base**(i + 1)
 
   # Array of cycled values adjusted to range that will contain target,
-  # taking advantage of the fact that the samp_cycle_sum array includes
+  # taking advantage of the fact that the lag_cycle_sum array includes
   # a representation of the smallest value of the next sequence.
   # Clamp values to minimum of 1 so that logarithm will work correctly.
-  adjusted_array = np.maximum(1, samp_sum * (target // samp_sum) + samp_cycle_sum)
+  adjusted_array = np.maximum(1, lag_sum * (target // lag_sum) + lag_cycle_sum)
 
-  # Calculate logarithmically closest sample, clamping to allowed
-  # values
-  samples[i] = min(n_frames - 1, max(1, set_len * (target // samp_sum) + np.argmin(np.absolute(np.log(adjusted_array) - math.log(target)))))
+  # Calculate logarithmically closest lag, clamping to allowed values
+  lags[i] = min(n_frames - 1, max(1, set_len * (target // lag_sum) + np.argmin(np.absolute(np.log(adjusted_array) - math.log(target)))))
 
-# Eliminate duplicate samples and prepend 0 for 0-length interval
-samples = np.insert(np.unique(samples), 0, 0)
+# Eliminate duplicate lags and prepend 0 for 0-length interval
+lags = np.insert(np.unique(lags), 0, 0)
 
-# Maximum number of samples per initial time. Likely less samples used
-# for most initial times due to limited remaining space in trajectory
-# set for offset
-n_samples = samples.size
+# Maximum number of lags per initial time. Likely less lags used for
+# most initial times due to limited remaining space in trajectory set
+# for offset
+n_lags = lags.size
 
 # If particles limited, must be read into different array
 if limit_particles == True:
@@ -204,16 +200,16 @@ z1 = np.empty(particles, dtype=np.single)
 cm = np.empty((n_frames, 3), dtype=np.float64)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_samples, dtype=np.float64)
+msd = np.zeros(n_lags, dtype=np.float64)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_samples, dtype=np.float64)
+overlap = np.zeros(n_lags, dtype=np.float64)
 
 # Result of scattering function for each difference in times
-fc = np.zeros((n_samples, 3), dtype=np.float64)
+fc = np.zeros((n_lags, 3), dtype=np.float64)
 
 # Normalization factor for scattering indices
-norm = np.zeros(n_samples, dtype=np.int64)
+norm = np.zeros(n_lags, dtype=np.int64)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -247,7 +243,7 @@ for i in np.arange(0, n_frames, set_len):
   # Iterate over ending points for functions and add to
   # accumulated values, making sure to only use indices
   # which are within the range of the files.
-  for index, j in enumerate(samples):
+  for index, j in enumerate(lags):
     if j >= (n_frames - i):
       continue
 
@@ -277,9 +273,8 @@ for i in np.arange(0, n_frames, set_len):
                                               ((y1 - cm[i + j][1]) - (y0 - cm[i][1]))**2 +
                                               ((z1 - cm[i + j][2]) - (z0 - cm[i][2]))**2), radius).astype(np.int8, copy=False))
 
-    # Accumulate the normalization value for this sample offset, which
-    # we will use later in computing the mean scattering value for each
-    # offset
+    # Accumulate the normalization value for this lag, which we will
+    # use later in computing the mean scattering value for each offset
     norm[index] += 1
 
   print("Processed frame %d" %(i + start + 1), file=sys.stderr)
@@ -289,7 +284,7 @@ print("#a = %f" %radius)
 
 # Normalize the accumulated scattering values, thereby obtaining
 # averages over each pair of frames
-fc /= norm.reshape((n_samples, 1))
+fc /= norm.reshape((n_lags, 1))
 
 # Normalize the overlap, thereby obtaining an average over each pair of
 # frames
@@ -299,10 +294,10 @@ overlap /= norm
 # frames
 msd /= norm
 
-for i in range(0, n_samples):
-  time = timestep * ((samples[i]//set_len) * samp_sum + samp_cycle_sum[samples[i]%set_len])
+for i in range(0, n_lags):
+  time = timestep * ((lags[i]//set_len) * lag_sum + lag_cycle_sum[lags[i]%set_len])
   # Print time difference, msd, averarge overlap, x, y, and z
   # scattering function averages, average of directional scattering
   # function number of frame sets contributing to such averages, and
   # frame difference
-  print("%f %f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], samples[i]))
+  print("%f %f %f %f %f %f %f %d %d" %(time, msd[i], overlap[i], fc[i][0], fc[i][1], fc[i][2], (fc[i][0]+fc[i][1]+fc[i][2])/3, norm[i], lags[i]))

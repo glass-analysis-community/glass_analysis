@@ -235,42 +235,43 @@ n_frames = final - start
 # Largest possible average interval width (t_b), adjusting for both
 # space taken up by t_a and t_c and intervals at the beginning which
 # may not be accessible
-max_width = n_frames - 1 - (framediff * ((max(tc - ta, 0) + (framediff - 1)) // framediff)) - max(ta + tc, 0)
+max_tbval = n_frames - 1 - (framediff * ((max(tc - ta, 0) + (framediff - 1)) // framediff)) - max(ta + tc, 0)
 
 if progtype == progtypes.flenner:
-  # Construct list of frame difference numbers for sampling according
-  # to a method of increasing spacing
+  # Construct list of t_b values according to a method of increasing
+  # spacing
   magnitude = -1
-  frames_beyond_magnitude = max_width
+  frames_beyond_magnitude = max_tbval
   while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
     magnitude += 1
     frames_beyond_magnitude -= 50 * 5**magnitude
 
-  samples_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
+  tbvals_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
 
-  n_samples = 1 + (50 * (magnitude + 1)) + samples_beyond_magnitude
+  n_tbvals = 1 + (50 * (magnitude + 1)) + tbvals_beyond_magnitude
 
   # Allocate that array
-  samples = np.empty(n_samples, dtype=np.int64)
+  tbvals = np.empty(n_tbvals, dtype=np.int64)
 
   # Efficiently fill the array
-  samples[0] = 0
-  last_sample_number = 0
+  tbvals[0] = 0
+  last_tbval = 0
   for i in range(0, magnitude + 1):
-    samples[1 + 50 * i : 1 + 50 * (i + 1)] = last_sample_number + np.arange(5**i , 51 * 5**i, 5**i)
-    last_sample_number += 50 * 5**i
-  samples[1 + 50 * (magnitude + 1) : n_samples] = last_sample_number + np.arange(5**(magnitude + 1), (samples_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
+    tbvals[1 + 50 * i : 1 + 50 * (i + 1)] = last_tbval + np.arange(5**i , 51 * 5**i, 5**i)
+    last_tbval += 50 * 5**i
+  tbvals[1 + 50 * (magnitude + 1) : n_tbvals] = last_tbval + np.arange(5**(magnitude + 1), (tbvals_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
 
 elif progtype == progtypes.geometric:
-  # Largest power of geom_base that will be able to be sampled
-  end_power = math.floor(math.log(max_width, geom_base))
+  # Largest power of geom_base that will be able to be used as a t_b
+  # value
+  end_power = math.floor(math.log(max_tbval, geom_base))
 
-  # Create array of sample numbers following geometric progression,
-  # with flooring to have samples adhere to integer boundaries,
-  # removing duplicate numbers, and prepending 0
-  samples = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
+  # Create array of t_b values following geometric progression, with
+  # flooring to have t_b values adhere to integer boundaries, removing
+  # duplicate numbers, and prepending 0
+  tbvals = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(np.int64)), 0, 0)
 
-  n_samples = samples.size
+  n_tbvals = tbvals.size
 
 # If particles limited, must be read into different array
 if limit_particles == True:
@@ -378,7 +379,7 @@ for i in range(0, n_runs):
       cm[i][j][2] = np.mean(z0)
 
 print("#dt = %d" %framediff)
-print("#n_samples = %d" %n_samples)
+print("#n_tbvals = %d" %n_tbvals)
 print("#t_a = %d" %ta)
 print("#t_c = %d" %tc)
 
@@ -514,7 +515,7 @@ def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
 print("Entering S4 calculation", file=sys.stderr)
 
 # Iterate over average interval lengths (t_b)
-for index, tb in enumerate(samples):
+for index, tb in enumerate(tbvals):
   # Clear interval accumulator
   s4[:, :, :, :] = 0.0
 
@@ -611,7 +612,7 @@ for index, tb in enumerate(samples):
       else:
         run_self_s4[0][0][0] += np.sum(w[0]) / particles
 
-      # Accumulate the normalization value for this sample value, which
+      # Accumulate the normalization value for this t_b value, which
       # we will use later in computing the mean value for each t_b
       if i == 0:
         norm += 1

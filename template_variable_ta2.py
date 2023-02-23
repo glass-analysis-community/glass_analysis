@@ -15,7 +15,7 @@ def usage():
         "-s Frame number to start on (index starts at 1)",
         "-d Spacing between initial times (dt)",
 #        "-x Number of Fourier transform vector constants to used in addition to q=0",
-        "-y Box size in each dimension (assumed to be cubic, required)"
+        "-y Box size in each dimension (assumed to be cubic, required)",
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
         "-p Limit number of particles to analyze",
@@ -164,8 +164,7 @@ else:
   max_neg_lag = -max_lag
 
 if progtype == progtypes.flenner:
-  # Construct list of frame difference numbers for sampling according
-  # to a method of increasing spacing
+  # Construct list of lags according to a method of increasing spacing
   magnitude = -1
   frames_beyond_magnitude = max_lag
   while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
@@ -181,11 +180,11 @@ if progtype == progtypes.flenner:
 
   # Efficiently fill the array
   lags[0] = 0
-  last_lag_number = 0
+  last_lag = 0
   for i in range(0, magnitude + 1):
-    lags[1 + 50 * i : 1 + 50 * (i + 1)] = last_lag_number + np.arange(5**i , 51 * 5**i, 5**i)
-    last_lag_number += 50 * 5**i
-  lags[1 + 50 * (magnitude + 1) : n_lags] = last_lag_number + np.arange(5**(magnitude + 1), (lags_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
+    lags[1 + 50 * i : 1 + 50 * (i + 1)] = last_lag + np.arange(5**i , 51 * 5**i, 5**i)
+    last_lag += 50 * 5**i
+  lags[1 + 50 * (magnitude + 1) : n_lags] = last_lag + np.arange(5**(magnitude + 1), (lags_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
 
 elif progtype == progtypes.geometric:
   # Largest power of geom_base that will be able to be read
