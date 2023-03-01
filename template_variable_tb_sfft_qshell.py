@@ -287,21 +287,11 @@ x1 = np.empty(particles, dtype=np.single)
 y1 = np.empty(particles, dtype=np.single)
 z1 = np.empty(particles, dtype=np.single)
 
-# Coordinates wrapped to box size
-x0m = np.empty(particles, dtype=np.single)
-y0m = np.empty(particles, dtype=np.single)
-z0m = np.empty(particles, dtype=np.single)
-
 # Used when interval start times are different
 if ta - tc != 0:
   x2 = np.empty(particles, dtype=np.single)
   y2 = np.empty(particles, dtype=np.single)
   z2 = np.empty(particles, dtype=np.single)
-
-  # Coordinates wrapped to box size
-  x2m = np.empty(particles, dtype=np.single)
-  y2m = np.empty(particles, dtype=np.single)
-  z2m = np.empty(particles, dtype=np.single)
 
 # Difference between particle positions at start of intervals, used
 # when interval start times are different
@@ -497,6 +487,7 @@ def get_frame(t0, xb0, yb0, zb0, run):
 def calculate_w(wa, xa0, ya0, za0, t1, xa1, ya1, za1, run):
   get_frame(t1, xa1, ya1, za1, run)
 
+  # Calculate w function for each particle
   if wtype == wtypes.theta:
     np.less((xa1 - xa0)**2 +
             (ya1 - ya0)**2 +
@@ -521,7 +512,7 @@ for index, tb in enumerate(tbvals):
 
   # Normalization factor for number of sets contributing to value for
   # t_b
-  norm = 0.0
+  norm = 0
 
   # Iterate over runs (FFT will be averaged over runs)
   for i in np.arange(0, n_runs):
@@ -543,20 +534,10 @@ for index, tb in enumerate(tbvals):
       # Get starting frame for first interval and store in x0, y0, z0
       get_frame(j, x0, y0, z0, i)
 
-      # Wrap coordinates to box size for binning
-      x0m[:] = x0 % box_size
-      y0m[:] = y0 % box_size
-      z0m[:] = z0 % box_size
-
       # If needed, get starting frame for second interval and store in
       # x2, y2, z2
       if ta - tc != 0:
         get_frame(j + ta - tc, x2, y2, z2, i)
-
-        # Wrap coordinates to box size for binning
-        x2m[:] = x2 % box_size
-        y2m[:] = y2 % box_size
-        z2m[:] = z2 % box_size
 
       # If needed, find differences between particle positions in
       # starting frames
@@ -575,15 +556,25 @@ for index, tb in enumerate(tbvals):
         else:
           calculate_w(w[1], x0, y0, z0, j + ta + tb, x1, y1, z1, i)
 
+      # Wrap particle coordinates to box size for binning
+      x0 %= box_size
+      y0 %= box_size
+      z0 %= box_size
+
       # Sort first interval w values into bins for FFT
-      a_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
+      a_bins, dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[0])
 
       # Sort second interval w values into bins for FFT if needed
       if ta != 0 or tc != 0:
         if ta - tc == 0:
-          b_bins, dummy = np.histogramdd((x0m, y0m, z0m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+          b_bins, dummy = np.histogramdd((x0, y0, z0), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
         else:
-          b_bins, dummy = np.histogramdd((x2m, y2m, z2m), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
+          # Wrap particle coordinates to box size for binning
+          x2 %= box_size
+          y2 %= box_size
+          z2 %= box_size
+
+          b_bins, dummy = np.histogramdd((x2, y2, z2), bins=size_fft, range=((0, box_size), ) * 3, weights=w[1])
 
       # Calculate total part of S4
       if ta != 0 or tc != 0:
@@ -613,7 +604,8 @@ for index, tb in enumerate(tbvals):
         run_self_s4[0][0][0] += np.sum(w[0]) / particles
 
       # Accumulate the normalization value for this t_b value, which
-      # we will use later in computing the mean value for each t_b
+      # will be used later in computing the mean s4 quantities for each
+      # t_b
       if i == 0:
         norm += 1
 
