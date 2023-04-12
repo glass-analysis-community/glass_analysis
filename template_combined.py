@@ -25,8 +25,8 @@ def usage():
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
         "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is geometric base)",
         "Interval increase progression modifiers:",
-        "--low-interval Trim set of interval lengths below value",
-        "--high-interval Trim set of interval lengths above value",
+        "--low-interval Trim set of interval lengths below frame number difference value",
+        "--high-interval Trim set of interval lengths above frame number difference value",
         sep="\n", file=sys.stderr)
 
 try:
