@@ -20,7 +20,7 @@ def usage():
         "-c Difference between intervals in frames (t_c)",
         "-p Limit number of particles to analyze",
         "-h Print usage",
-        "Interval increase progression (last specified is used):"
+        "Interval increase progression (last specified is used):",
         "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
         "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is number of lags)",
         "-l Linear spacing progression, uses same spacing as initial times (no argument)",
@@ -156,12 +156,6 @@ n_frames = fileframes[-1] - start
 
 # Largest possible lag
 max_lag = n_frames - tb - 1
-
-# Largest possible negative lag
-if negative_lags == False:
-  max_neg_lag = 0
-else:
-  max_neg_lag = -max_lag
 
 if progtype == progtypes.flenner:
   # Construct list of lags according to a method of increasing spacing
