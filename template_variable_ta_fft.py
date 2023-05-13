@@ -11,6 +11,7 @@ import lib.opentraj
 import lib.progression
 import lib.frame
 import lib.wcalc
+import lib.qshell
 
 def usage():
   print("Arguments:", file=sys.stderr)
@@ -20,18 +21,22 @@ def usage():
         "-y Box size in each dimension (assumed to be cubic, required)",
         "-b Average interval in frames (t_b)",
         "-c Difference between intervals in frames (t_c)",
+        "-i Write output to files, one for each lag time",
         "-h Print usage",
         sep="\n", file=sys.stderr)
   lib.frame.usage()
   lib.progression.usage()
   lib.wcalc.usage()
+  lib.qshell.usage()
+  print("If no q vector shell options specified, all q vector values printed", file=sys.stderr)
 
 try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "s:d:x:y:b:c:jh" +
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "s:d:x:y:b:c:ijh" +
                                                lib.opentraj.shortopts +
                                                lib.progression.shortopts +
                                                lib.frame.shortopts +
-                                               lib.wcalc.shortopts,
+                                               lib.wcalc.shortopts +
+                                               lib.qshell.shortopts,
                                                lib.progression.longopts)
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
@@ -59,6 +64,8 @@ box_size = None
 tb = 1
 # Half difference between length of initial and end intervals (t_c)
 tc = 0
+# Whether to write output to files rather than stdout
+dumpfiles = False
 # Progression specification/generation object for lags
 prog = lib.progression.prog()
 # Trajectory set opening object
@@ -67,6 +74,10 @@ trajset = lib.opentraj.trajset()
 frames = lib.frame.frames(trajset)
 # w function calculation object
 wcalc = lib.wcalc.wcalc(frames)
+# q vector shell sorting object
+qshell = lib.qshell.qshell()
+# Whether q vector shells are to be used
+qshell_active = False
 
 for o, a in opts:
   if o == "-h":
@@ -84,6 +95,8 @@ for o, a in opts:
     tb = int(a)
   elif o == "-c":
     tc = int(a)
+  elif o == "-i":
+    dumpfiles = True
   elif o == "-j":
     print("-j is default, no need to specify", file=sys.stderr)
   elif trajset.catch_opt(o, a) == True:
@@ -94,9 +107,8 @@ for o, a in opts:
     pass
   elif wcalc.catch_opt(o, a) == True:
     pass
-
-# Verify correctness of parameters
-wcalc.verify()
+  elif qshell.catch_opt(o, a) == True:
+    qshell_active = True
 
 if box_size == None:
   raise RuntimeError("Must define box size dimensions")
@@ -113,6 +125,17 @@ if prog.progtype == None:
 # Open trajectory files
 trajset.opentraj_multirun("run", "traj", 1, True)
 
+# Verify correctness of parameters for w calculation from arguments
+wcalc.prepare()
+
+# Prepare frames object for calculation
+frames.prepare()
+
+# Generate qshell elements if onion shells are used, used for sorting
+# values into shells
+if qshell_active == True:
+  qshell.prepare(size_fft, box_size)
+
 # Print basic properties shared across the files
 print("#nset: %d" %trajset.fileframes[-1])
 print("#N: %d" %trajset.fparticles)
@@ -128,9 +151,6 @@ if initend == None:
 else:
   if initend > trajset.fileframes[-1]:
     raise RuntimeError("End initial time frame beyond set of frames")
-
-# Prepare frames object for calculation
-frames.prepare()
 
 # Largest possible positive and negative lags
 prog.max_val = frames.n_frames - 1 - max(tb, tb - tc)
@@ -193,11 +213,15 @@ elif wcalc.wtype == lib.wcalc.wtypes.exp:
 
 # Find center of mass for each frame
 print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm(x0, y0, z0)
+frames.generate_cm()
 
 # S4 calcuation
 
 print("Entering S4 calculation", file=sys.stderr)
+
+# If output files not used, write to stdout
+if dumpfiles == False:
+  outfile = sys.stdout
 
 # Iterate over lags (t_a)
 for index, ta in enumerate(lags):
@@ -300,24 +324,79 @@ for index, ta in enumerate(lags):
   s4[stypes.distinctstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (trajset.n_runs - 1))
 
   # Print results for current lag
-  time_ta = lags[index] * trajset.timestep * trajset.tbsave
-  for i in range(0, size_fft):
-    for j in range(0, size_fft):
-      for k in range(0, (size_fft // 2) + 1):
-        # Print t_a, x, y, and z components of fft frequency, total,
-        # self, and distinct averages, standard deviations across runs
-        # of total, self, and distinct averages, number of frame sets
-        # contributing to such average, and frame difference
-        # corresponding to t_a
-        print("%f %f %f %f %f %f %f %f %f %f %d %d" %(time_ta,
-                                                      (i-size_fft//2)*2*math.pi/box_size,
-                                                      (j-size_fft//2)*2*math.pi/box_size,
-                                                      k*2*math.pi/box_size,
-                                                      s4[stypes.total.value][i][j][k],
-                                                      s4[stypes.self.value][i][j][k],
-                                                      s4[stypes.distinct.value][i][j][k],
-                                                      s4[stypes.totalstd.value][i][j][k],
-                                                      s4[stypes.selfstd.value][i][j][k],
-                                                      s4[stypes.distinctstd.value][i][j][k],
-                                                      norm,
-                                                      lags[index]))
+
+  # Lag time in real units
+  time_ta = ta * trajset.timestep * trajset.tbsave
+
+  # If output files used, open file for current lag
+  if dumpfiles == True:
+    outfile = open("lag_%f" %(lags[index]), "w")
+
+  # If q vector shells used, sort by q vector magnitude into onion
+  # shells and discrete magnitudes and print the averages of values for
+  # each
+  if qshell_active == True:
+    discrete_s4, shell_s4 = qshell.to_shells(s4)
+
+    # For each discrete q value, print t_a, q value, number of FFT
+    # matrix elements contributing to q value, total, self, and
+    # distinct averages, standard deviations of total, self, and
+    # distinct averages, number of frame sets contributing to such
+    # averages, and frame difference corresponding to t_a
+    for i in range(0, discrete_s4.shape[-1]):
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                           qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
+                                                           qshell.qnorm_discrete_sorted[i],
+                                                           discrete_s4[stypes.total.value][i],
+                                                           discrete_s4[stypes.self.value][i],
+                                                           discrete_s4[stypes.distinct.value][i],
+                                                           discrete_s4[stypes.totalstd.value][i],
+                                                           discrete_s4[stypes.selfstd.value][i],
+                                                           discrete_s4[stypes.distinctstd.value][i],
+                                                           norm,
+                                                           ta))
+
+    # For each shell, print t_a, midpoint of q value range of fft
+    # frequency, number of FFT matrix elements contributing to q value,
+    # total, self, and distinct averages, standard deviations of total,
+    # self, and distinct averages, number of frame sets contributing to
+    # such averages, and frame difference corresponding to t_a
+    for i in range(0, shell_s4.shape[-1]):
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                           (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
+                                                           qshell.qnorm_shells[i],
+                                                           shell_s4[stypes.total.value][i],
+                                                           shell_s4[stypes.self.value][i],
+                                                           shell_s4[stypes.distinct.value][i],
+                                                           shell_s4[stypes.totalstd.value][i],
+                                                           shell_s4[stypes.selfstd.value][i],
+                                                           shell_s4[stypes.distinctstd.value][i],
+                                                           norm,
+                                                           ta))
+
+  # If q vector shells not used, print all elements
+  else:
+    for i in range(0, size_fft):
+      for j in range(0, size_fft):
+        for k in range(0, (size_fft // 2) + 1):
+          # Print t_a, x, y, and z components of fft frequency, total,
+          # self, and distinct averages, standard deviations across runs
+          # of total, self, and distinct averages, number of frame sets
+          # contributing to such average, and frame difference
+          # corresponding to t_a
+          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                                  (i-size_fft//2)*2*math.pi/box_size,
+                                                                  (j-size_fft//2)*2*math.pi/box_size,
+                                                                  k*2*math.pi/box_size,
+                                                                  s4[stypes.total.value][i][j][k],
+                                                                  s4[stypes.self.value][i][j][k],
+                                                                  s4[stypes.distinct.value][i][j][k],
+                                                                  s4[stypes.totalstd.value][i][j][k],
+                                                                  s4[stypes.selfstd.value][i][j][k],
+                                                                  s4[stypes.distinctstd.value][i][j][k],
+                                                                  norm,
+                                                                  lags[index]))
+
+  # If output files for each lag used, close file for this lag
+  if dumpfiles == True:
+    outfile.close()

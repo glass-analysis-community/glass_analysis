@@ -126,7 +126,7 @@ class wcalc():
 
     return True
 
-  def verify(self):
+  def prepare(self):
     """
     Verify that arguments for w calculation have been specified
     sufficiently for further operations. Should be called after

@@ -96,9 +96,9 @@ class frames():
 
     if self.limit_particles == False:
       # Allocate intermediate particle reading arrays
-      x0 = np.array(self.particles, dtype=np.single)
-      y0 = np.array(self.particles, dtype=np.single)
-      z0 = np.array(self.particles, dtype=np.single)
+      x0 = np.empty(self.particles, dtype=np.single)
+      y0 = np.empty(self.particles, dtype=np.single)
+      z0 = np.empty(self.particles, dtype=np.single)
 
     # Allocate array for center of mass of each frame
     self.cm = [np.empty((self.n_frames, 3), dtype=np.float64)] * self.n_runs
@@ -109,10 +109,10 @@ class frames():
         offset = self.start + j - self.fileframes[which_file]
 
         if self.limit_particles == True:
-          self.trajset.dcdfiles[i][which_file].gdcdp(x, y, z, offset)
-          self.cm[i][j][0] = np.mean(x[self.lower_limit:self.upper_limit])
-          self.cm[i][j][1] = np.mean(y[self.lower_limit:self.upper_limit])
-          self.cm[i][j][2] = np.mean(z[self.lower_limit:self.upper_limit])
+          self.trajset.dcdfiles[i][which_file].gdcdp(self.x, self.y, self.z, offset)
+          self.cm[i][j][0] = np.mean(self.x[self.lower_limit:self.upper_limit])
+          self.cm[i][j][1] = np.mean(self.y[self.lower_limit:self.upper_limit])
+          self.cm[i][j][2] = np.mean(self.z[self.lower_limit:self.upper_limit])
         else:
           self.trajset.dcdfiles[i][which_file].gdcdp(x0, y0, z0, offset)
           self.cm[i][j][0] = np.mean(x0)
