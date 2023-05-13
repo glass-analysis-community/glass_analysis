@@ -56,17 +56,12 @@ template_variable_ta_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a linear
   sequence of values of t_a, which represents the lag between intervals
   (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses both time and spatial
-  FFTs to accelerate calculation, especially for nonzero q values.
-
-template_variable_ta_fft_qshell.py
-  Calculates S4 from multiple runs. This script calculates S4 for a linear
-  sequence of values of t_a, which represents the lag between intervals
-  (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses both time and spatial
-  FFTs to accelerate calculation, especially for nonzero q values. Output
-  values for different q vectors are binned according to the magnitude of q,
-  with q magnitudes under a certain threshold being reported individually,
-  and q magnitudes above such threshold being binned into sets of onion shells
-  with a range of magnitudes.
+  FFTs to accelerate calculation, especially for nonzero q values. If
+  specified via options, output may be sorted according to q vector
+  magnitudes. With such options, output values for different q vectors are
+  binned according to the magnitude of q, with q magnitudes under a certain
+  threshold being reported individually, and q magnitudes above such threshold
+  being binned into sets of onion shells with a range of magnitudes.
 
 template_variable_tb.py
   Calculates S4 from multiple runs. This script calculates S4 for a
