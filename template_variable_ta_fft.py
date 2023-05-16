@@ -13,36 +13,6 @@ import lib.frame
 import lib.wcalc
 import lib.qshell
 
-def usage():
-  print("Arguments:", file=sys.stderr)
-  lib.opentraj.usage()
-  print("-d Spacing between initial times as well as lag values (dt)",
-        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
-        "-y Box size in each dimension (assumed to be cubic, required)",
-        "-b Average interval in frames (t_b)",
-        "-c Difference between intervals in frames (t_c)",
-        "-i Write output to files, one for each lag time",
-        "-h Print usage",
-        sep="\n", file=sys.stderr)
-  lib.frame.usage()
-  lib.progression.usage()
-  lib.wcalc.usage()
-  lib.qshell.usage()
-  print("If no q vector shell options specified, all q vector values printed", file=sys.stderr)
-
-try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "s:d:x:y:b:c:ijh" +
-                                               lib.opentraj.shortopts +
-                                               lib.progression.shortopts +
-                                               lib.frame.shortopts +
-                                               lib.wcalc.shortopts +
-                                               lib.qshell.shortopts,
-                                               lib.progression.longopts)
-except getopt.GetoptError as err:
-  print(err, file=sys.stderr)
-  usage()
-  sys.exit(1)
-
 class stypes(enum.Enum):
   total = 0
   self = 1
@@ -68,8 +38,10 @@ tc = 0
 dumpfiles = False
 # Progression specification/generation object for lags
 prog = lib.progression.prog()
+# Run set opening object
+runset = lib.opentraj.runset()
 # Trajectory set opening object
-trajset = lib.opentraj.trajset()
+trajset = lib.opentraj.trajset(runset)
 # Frame reading object
 frames = lib.frame.frames(trajset)
 # w function calculation object
@@ -79,10 +51,45 @@ qshell = lib.qshell.qshell()
 # Whether q vector shells are to be used
 qshell_active = False
 
+def usage():
+  print("Arguments:", file=sys.stderr)
+  runset.usage()
+  trajset.usage()
+  frames.usage()
+  print("-k Last frame number in range to use for initial times (index starts at 1)",
+        "-d Spacing between initial times as well as lag values (dt)",
+        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
+        "-y Box size in each dimension (assumed to be cubic, required)",
+        "-b Average interval in frames (t_b)",
+        "-c Difference between intervals in frames (t_c)",
+        "-i Write output to files, one for each lag time",
+        "-h Print usage",
+        sep="\n", file=sys.stderr)
+  prog.usage()
+  wcalc.usage()
+  qshell.usage()
+  print("If no q vector shell options specified, all q vector values printed", file=sys.stderr)
+
+try:
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "k:d:x:y:b:c:ijh" +
+                                               runset.shortopts +
+                                               trajset.shortopts +
+                                               prog.shortopts +
+                                               frames.shortopts +
+                                               wcalc.shortopts +
+                                               qshell.shortopts,
+                                               prog.longopts)
+except getopt.GetoptError as err:
+  print(err, file=sys.stderr)
+  usage()
+  sys.exit(1)
+
 for o, a in opts:
   if o == "-h":
     usage()
     sys.exit(0)
+  elif o == "-k":
+    initend = int(a)
   elif o == "-s":
     start = int(a) - 1
   elif o == "-d":
@@ -99,6 +106,8 @@ for o, a in opts:
     dumpfiles = True
   elif o == "-j":
     print("-j is default, no need to specify", file=sys.stderr)
+  elif runset.catch_opt(o, a) == True:
+    pass
   elif trajset.catch_opt(o, a) == True:
     pass
   elif prog.catch_opt(o, a) == True:
@@ -113,23 +122,17 @@ for o, a in opts:
 if box_size == None:
   raise RuntimeError("Must define box size dimensions")
 
-if trajset.n_runs <= 1:
-  raise RuntimeError("Must have at least 2 runs")
-
 if size_fft == None:
   raise RuntimeError("Must specify size for FFT matrix")
 
-if prog.progtype == None:
-  raise RuntimeError("Must specify interval increase progression type")
-
 # Open trajectory files
-trajset.opentraj_multirun("run", "traj", 1, True)
-
-# Verify correctness of parameters for w calculation from arguments
-wcalc.prepare()
+trajset.opentraj_multirun(1, True)
 
 # Prepare frames object for calculation
 frames.prepare()
+
+# Verify correctness of parameters for w calculation from arguments
+wcalc.prepare()
 
 # Generate qshell elements if onion shells are used, used for sorting
 # values into shells
@@ -177,16 +180,18 @@ b_bins = np.zeros((size_fft, size_fft, size_fft), dtype=np.float64)
 self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
 
 # Temporary value for each run to allow for calculation of each run's
-# self component of s4
+# self component of S4
 run_self_s4 = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # Temporary value for each run to allow for calculation of each run's
-# total component of s4
+# total component of S4
 run_total_s4 = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
-# Structure factor variance for each difference in times. The second
-# and third fft dimensions hold values for negative vectors. Since all
-# inputs are real, this is not required for the first fft dimension.
+# Array for S4 values. The first and second fft dimensions include
+# values for negative vectors. Since all inputs are real, this is not
+# required for the third fft dimension, as the values would be the same
+# for a vector in the exact opposite direction (with all vector
+# components of opposite sign).
 s4 = np.zeros((n_stypes, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # W function values for each particle and for both initial and end
@@ -201,15 +206,8 @@ print("#n_lags = %d" %lags.size)
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 
-if wcalc.wtype == lib.wcalc.wtypes.theta:
-  print("#w function type: Threshold")
-  print("#a = %f" %wcalc.radius)
-elif wcalc.wtype == lib.wcalc.wtypes.gauss:
-  print("#w function type: Gaussian")
-  print("#a = %f" %wcalc.gscale)
-elif wcalc.wtype == lib.wcalc.wtypes.exp:
-  print("#w function type: Single Exponential")
-  print("#a = %f" %wcalc.sscale)
+# Print information about w function calculation
+wcalc.print_info()
 
 # Find center of mass for each frame
 print("Finding centers of mass for frames", file=sys.stderr)
@@ -228,11 +226,12 @@ for index, ta in enumerate(lags):
   # Clear lag accumulator
   s4[:, :, :, :] = 0.0
 
-  # Normalization factor for number of sets contributing to lag value
+  # Normalization factor for number of frame pairs contributing to
+  # current lag value
   norm = 0
 
   # Iterate over runs (FFT will be averaged over runs)
-  for i in np.arange(0, trajset.n_runs):
+  for i in np.arange(0, runset.n_runs):
     # Clear run accumulators
     run_self_s4[:, :, :] = 0.0
     run_total_s4[:, :, :] = 0.0
@@ -316,12 +315,12 @@ for index, ta in enumerate(lags):
     s4[stypes.distinctstd.value] += run_distinct_s4**2
 
   # Normalize S4 values across runs
-  s4 /= trajset.n_runs
+  s4 /= runset.n_runs
 
   # Calculate standard deviations from normalized variances over runs
-  s4[stypes.totalstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (trajset.n_runs - 1))
-  s4[stypes.selfstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (trajset.n_runs - 1))
-  s4[stypes.distinctstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (trajset.n_runs - 1))
+  s4[stypes.totalstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (runset.n_runs - 1))
+  s4[stypes.selfstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (runset.n_runs - 1))
+  s4[stypes.distinctstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (runset.n_runs - 1))
 
   # Print results for current lag
 
@@ -338,11 +337,19 @@ for index, ta in enumerate(lags):
   if qshell_active == True:
     discrete_s4, shell_s4 = qshell.to_shells(s4)
 
-    # For each discrete q value, print t_a, q value, number of FFT
-    # matrix elements contributing to q value, total, self, and
-    # distinct averages, standard deviations of total, self, and
-    # distinct averages, number of frame sets contributing to such
-    # averages, and frame difference corresponding to t_a
+    # Print output columns for first region disctinct q magnitudes:
+    # 1 - t_a
+    # 2 - q vector magnitude
+    # 3 - number of q vectors with given magnitude
+    # 4 - S4 total component run average
+    # 5 - S4 self component run average
+    # 6 - S4 distinct component run average
+    # 7 - S4 total component standard deviation
+    # 8 - S4 self component standard deviation
+    # 9 - S4 distinct component standard deviation
+    # 10 - number of frame sets in each run contributing to
+    #      average of quantities
+    # 11 - frame difference corresponding to t_a
     for i in range(0, discrete_s4.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
                                                            qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
@@ -356,11 +363,19 @@ for index, ta in enumerate(lags):
                                                            norm,
                                                            ta))
 
-    # For each shell, print t_a, midpoint of q value range of fft
-    # frequency, number of FFT matrix elements contributing to q value,
-    # total, self, and distinct averages, standard deviations of total,
-    # self, and distinct averages, number of frame sets contributing to
-    # such averages, and frame difference corresponding to t_a
+    # Print output columns for second region q magnitude onion shells:
+    # 1 - t_a
+    # 2 - q magnitude of midpoint of onion shells
+    # 3 - number of q vectors within magnitude range of shell
+    # 4 - S4 total component run average
+    # 5 - S4 self component run average
+    # 6 - S4 distinct component run average
+    # 7 - S4 total component standard deviation
+    # 8 - S4 self component standard deviation
+    # 9 - S4 distinct component standard deviation
+    # 10 - number of frame sets in each run contributing to
+    #      average of quantities
+    # 11 - frame difference corresponding to t_a
     for i in range(0, shell_s4.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
                                                            (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
@@ -379,11 +394,20 @@ for index, ta in enumerate(lags):
     for i in range(0, size_fft):
       for j in range(0, size_fft):
         for k in range(0, (size_fft // 2) + 1):
-          # Print t_a, x, y, and z components of fft frequency, total,
-          # self, and distinct averages, standard deviations across runs
-          # of total, self, and distinct averages, number of frame sets
-          # contributing to such average, and frame difference
-          # corresponding to t_a
+          # Print output columns:
+          # 1 - t_a
+          # 2 - x component of fft frequency
+          # 3 - y component of fft frequency
+          # 4 - z component of fft frequency
+          # 5 - S4 total component run average
+          # 6 - S4 self component run average
+          # 7 - S4 distinct component run average
+          # 8 - S4 total component standard deviation
+          # 9 - S4 self component standard deviation
+          # 10 - S4 distinct component standard deviation
+          # 11 - number of frame sets in each run contributing to
+          #      average of quantities
+          # 12 - frame difference corresponding to t_a
           outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n" %(time_ta,
                                                                   (i-size_fft//2)*2*math.pi/box_size,
                                                                   (j-size_fft//2)*2*math.pi/box_size,
@@ -395,7 +419,7 @@ for index, ta in enumerate(lags):
                                                                   s4[stypes.selfstd.value][i][j][k],
                                                                   s4[stypes.distinctstd.value][i][j][k],
                                                                   norm,
-                                                                  lags[index]))
+                                                                  ta))
 
   # If output files for each lag used, close file for this lag
   if dumpfiles == True:

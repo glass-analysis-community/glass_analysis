@@ -7,395 +7,503 @@ import enum
 
 # Import functionality from local library directory
 import lib.opentraj
-
-def usage():
-  print("Arguments:",
-        "-n Number of files",
-        "-r Number of runs, numbered as folders",
-        "-s Frame number to start on (index starts at 1)",
-        "-d Spacing between initial times (dt)",
-#        "-x Number of Fourier transform vector constants to used in addition to q=0",
-        "-y Box size in each dimension (assumed to be cubic, required)",
-        "-b Average interval in frames (t_b)",
-        "-c Difference between intervals in frames (t_c)",
-        "-p Limit number of particles to analyze",
-        "-h Print usage",
-        "Interval increase progression (last specified is used):",
-        "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
-        "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is number of lags)",
-        "-l Linear spacing progression, uses same spacing as initial times (no argument)",
-        "-m Mirror lags to have negative values",
-        "w function types (last specified is used, must be specified):",
-        "-t Theta function threshold (argument is threshold radius)",
-        "-u Double negative exponential/Gaussian (argument is exponential length)",
-        "-e Single negative exponential (argument is exponential length)",
-        sep="\n", file=sys.stderr)
-
-try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:d:x:y:b:c:p:jhfg:lmt:u:e:")
-except getopt.GetoptError as err:
-  print(err, file=sys.stderr)
-  usage()
-  sys.exit(1)
-
-class progtypes(enum.Enum):
-  flenner = 1
-  geometric = 2
-  linear = 3
-
-class wtypes(enum.Enum):
-  none = 1
-  theta = 2
-  gauss = 3
-  exp = 4
+import lib.progression
+import lib.frame
+import lib.wcalc
+import lib.qshell
 
 class stypes(enum.Enum):
   total = 0
   self = 1
   distinct = 2
+  totalstd = 3
+  selfstd = 4
+  distinctstd = 5
 n_stypes = len(stypes)
 
-# Total number of trajectory files
-n_files = 1
-# Total number of run folders. 0 means not specified.
-n_runs = 0
-# What frame number to start on
-start = 0
+# Last frame number to use for initial times
+initend = None
 # Spacing between initial times (dt)
 framediff = 10
 # Number of Fourier transform vector constants (including q=0)
-n_q = 1
+size_ft = None
 # User-defined value of dimension of box, assumed to be cubic
 box_size = None
 # Average length of intervals (t_b)
 tb = 1
 # Half difference between length of initial and end intervals (t_c)
 tc = 0
-# Number of particles to limit analysis to
-particle_limit = None
-# Type of progression to increase time interval by
-progtype = progtypes.flenner
-# Whether to use mirrored negative lags
-negative_lags = False
-# Type of w function to use
-wtype = wtypes.none
+# Whether to write output to files rather than stdout
+dumpfiles = False
+# Progression specification/generation object for lags
+prog = lib.progression.prog()
+# Run set opening object
+runset = lib.opentraj.runset()
+# Trajectory set opening object
+trajset = lib.opentraj.trajset(runset)
+# Frame reading object
+frames = lib.frame.frames(trajset)
+# w function calculation object
+wcalc = lib.wcalc.wcalc(frames)
+# q vector shell sorting object
+qshell = lib.qshell.qshell()
+# Whether q vector shells are to be used
+qshell_active = False
+
+def usage():
+  print("Arguments:", file=sys.stderr)
+  runset.usage()
+  trajset.usage()
+  frames.usage()
+  print("-k Last frame number in range to use for initial times (index starts at 1)",
+        "-d Spacing between initial times (dt)",
+        "-x Number of Fourier transform vector lengths to be used in each direction in addition to q=0",
+        "-y Box size in each dimension (assumed to be cubic, required)",
+        "-b Average interval in frames (t_b)",
+        "-c Difference between intervals in frames (t_c)",
+        "-i Write output to files, one for each lag time",
+        "-h Print usage",
+        sep="\n", file=sys.stderr)
+  prog.usage()
+  wcalc.usage()
+  qshell.usage()
+  print("If no q vector shell options specified, all q vector values printed", file=sys.stderr)
+
+try:
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "k:d:x:y:b:c:ijh" +
+                                               runset.shortopts +
+                                               trajset.shortopts +
+                                               prog.shortopts +
+                                               frames.shortopts +
+                                               wcalc.shortopts +
+                                               qshell.shortopts,
+                                               prog.longopts)
+except getopt.GetoptError as err:
+  print(err, file=sys.stderr)
+  usage()
+  sys.exit(1)
 
 for o, a in opts:
   if o == "-h":
     usage()
     sys.exit(0)
-  elif o == "-n":
-    n_files = int(a)
-  elif o == "-r":
-    n_runs = int(a)
+  elif o == "-k":
+    initend = int(a)
   elif o == "-s":
     start = int(a) - 1
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
-    n_q = int(a) + 1
+    size_ft = int(a) + 1
   elif o == "-y":
     box_size = float(a)
   elif o == "-b":
     tb = int(a)
   elif o == "-c":
     tc = int(a)
-  elif o == "-p":
-    particle_limit = int(a)
-  elif o == "-f":
-    progtype = progtypes.flenner
-  elif o == "-g":
-    progtype = progtypes.geometric
-    geom_num = int(a)
-  elif o == "-l":
-    progtype = progtypes.linear
-  elif o == "-m":
-    negative_lags = True
+  elif o == "-i":
+    dumpfiles = True
   elif o == "-j":
     print("-j is default, no need to specify", file=sys.stderr)
-  elif o == "-t":
-    wtype = wtypes.theta
-    radius = float(a)
-  elif o == "-u":
-    wtype = wtypes.gauss
-    sscale = float(a)
-  elif o == "-e":
-    wtype = wtypes.exp
-    gscale = float(a)
-
-if wtype == wtypes.none:
-  raise RuntimeError("No w function type specified")
+  elif runset.catch_opt(o, a) == True:
+    pass
+  elif trajset.catch_opt(o, a) == True:
+    pass
+  elif prog.catch_opt(o, a) == True:
+    pass
+  elif frames.catch_opt(o, a) == True:
+    pass
+  elif wcalc.catch_opt(o, a) == True:
+    pass
+  elif qshell.catch_opt(o, a) == True:
+    qshell_active = True
 
 if box_size == None:
   raise RuntimeError("Must define box size dimensions")
 
-if n_runs <= 1:
-  raise RuntimeError("Must have at least 2 runs")
+if size_ft == None:
+  raise RuntimeError("Must specify number of values for each q vector component")
 
 # Open trajectory files
-dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
+trajset.opentraj_multirun(1, True)
 
-# Limit particles if necessary
-if particle_limit == None:
-  particles = fparticles
-else:
-  if particle_limit < fparticles:
-    particles = particle_limit
-  else:
-    particles = fparticles
-    particle_limit = None
+# Prepare frames object for calculation
+frames.prepare()
+
+# Verify correctness of parameters for w calculation from arguments
+wcalc.prepare()
+
+# Generate qshell elements if onion shells are used, used for sorting
+# values into shells
+if qshell_active == True:
+  qshell.prepare(2*size_ft - 1, box_size)
 
 # Print basic properties shared across the files
-print("#nset: %d" %fileframes[-1])
-print("#N: %d" %particles)
-print("#timestep: %f" %timestep)
-print("#tbsave: %f" %tbsave)
+print("#nset: %d" %trajset.fileframes[-1])
+print("#N: %d" %trajset.fparticles)
+print("#timestep: %f" %trajset.timestep)
+print("#tbsave: %f" %trajset.tbsave)
 
-# Number of frames in each run to analyze
-n_frames = fileframes[-1] - start
+# End of set of frames to use for initial times
+if initend == None:
+  initend = trajset.fileframes[-1]
+else:
+  if initend > trajset.fileframes[-1]:
+    raise RuntimeError("End initial time frame beyond set of frames")
 
-# Largest possible lag
-max_lag = n_frames - tb - 1
+# Largest possible positive and negative lags
+prog.max_val = frames.n_frames - 1 - max(tb, tb - tc)
+prog.min_val = -((framediff * ((frames.n_frames - 1 - (tb - 2 * tc)) // framediff)) - tc)
 
-if progtype == progtypes.flenner:
-  # Construct list of lags according to a method of increasing spacing
-  magnitude = -1
-  frames_beyond_magnitude = max_lag
-  while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
-    magnitude += 1
-    frames_beyond_magnitude -= 50 * 5**magnitude
-
-  lags_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
-
-  n_lags = 1 + (50 * (magnitude + 1)) + lags_beyond_magnitude
-
-  # Allocate that array
-  lags = np.empty(n_lags, dtype=np.int64)
-
-  # Efficiently fill the array
-  lags[0] = 0
-  last_lag = 0
-  for i in range(0, magnitude + 1):
-    lags[1 + 50 * i : 1 + 50 * (i + 1)] = last_lag + np.arange(5**i , 51 * 5**i, 5**i)
-    last_lag += 50 * 5**i
-  lags[1 + 50 * (magnitude + 1) : n_lags] = last_lag + np.arange(5**(magnitude + 1), (lags_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
-
-elif progtype == progtypes.geometric:
-  # Largest power of geom_base that will be able to be read
-  geom_base = max_lag**(1.0 / geom_num)
-
-  # Create array of lags following geometric progression, with flooring
-  # to have lags adhere to integer boundaries, removing duplicate
-  # numbers, and prepending 0
-  lags = np.insert(np.unique(np.floor(np.logspace(0, geom_num, num=(geom_num + 1), base=geom_base)).astype(np.int64)), 0, 0)
-
-elif progtype == progtypes.linear:
-  # Create evenly spaced array of lag values with same spacing as
-  # initial times (framediff)
-  lags = np.arange(0, max_lag + 1, step=framediff)
-
-if negative_lags == True:
-  # Mirror lags array, making sure not to duplicate the 0 value at
-  # index 0
-  lags = np.concatenate((np.flip(-lags[1:]), lags))
-
-# Number of lag values
-n_lags = lags.size
+# Construct progression of interval values using previously-specified
+# parameters
+lags = prog.construct()
 
 # Array with progression of q values to use, with 0.0 always at index 0.
 # All of these create integral number of wave periods inside the box.
-qs = np.linspace(0.0, (n_q - 1) * 2 * math.pi / box_size, num=n_q)
-
-# If particles limited, must be read into different array
-if particle_limit != None:
-  x = np.empty(fparticles, dtype=np.single)
-  y = np.empty(fparticles, dtype=np.single)
-  z = np.empty(fparticles, dtype=np.single)
+# Full array has both positive and negative values.
+qs = np.linspace(0.0, (size_ft - 1) * 2 * math.pi / box_size, num=size_ft)
+qs_full = np.concatenate((-np.flip(qs[1:]), qs))
 
 # Stores coordinates of all particles in a frame
-x0 = np.empty(particles, dtype=np.single)
-y0 = np.empty(particles, dtype=np.single)
-z0 = np.empty(particles, dtype=np.single)
-x1 = np.empty(particles, dtype=np.single)
-y1 = np.empty(particles, dtype=np.single)
-z1 = np.empty(particles, dtype=np.single)
-x2 = np.empty(particles, dtype=np.single)
-y2 = np.empty(particles, dtype=np.single)
-z2 = np.empty(particles, dtype=np.single)
-x3 = np.empty(particles, dtype=np.single)
-y3 = np.empty(particles, dtype=np.single)
-z3 = np.empty(particles, dtype=np.single)
+x0 = np.empty(frames.particles, dtype=np.single)
+y0 = np.empty(frames.particles, dtype=np.single)
+z0 = np.empty(frames.particles, dtype=np.single)
+x1 = np.empty(frames.particles, dtype=np.single)
+y1 = np.empty(frames.particles, dtype=np.single)
+z1 = np.empty(frames.particles, dtype=np.single)
+x2 = np.empty(frames.particles, dtype=np.single)
+y2 = np.empty(frames.particles, dtype=np.single)
+z2 = np.empty(frames.particles, dtype=np.single)
 
-# Center of mass of each frame
-cm = [np.empty((n_frames, 3), dtype=np.float64)] * n_runs
+# Temporary value for each run to allow for calculation of each run's
+# self component of S4
+run_self_s4 = np.empty((2*size_ft - 1, 2*size_ft - 1, size_ft), dtype=np.float64)
 
-# Structure factor variance for each difference in times
-s4 = np.zeros((n_stypes, n_lags, n_q, 3), dtype=np.float64)
+# Temporary value for each run to allow for calculation of each run's
+# total component of S4
+run_total_s4 = np.empty((2*size_ft - 1, 2*size_ft - 1, size_ft), dtype=np.float64)
 
-# Normalization factor for structure factor variance indices
-norm = np.zeros(n_lags, dtype=np.int64)
+# Temporary value for each run to allow for calculation of each frame
+# pair's total component of S4. In first dimension, first index is
+# real and second is imaginary
+lag_total_s4 = np.empty((2, 2*size_ft - 1, 2*size_ft - 1, size_ft), dtype=np.float64)
+
+# Array for S4 values. The first and second q vector dimensions include
+# values for negative vectors. Since all inputs are real, this is not
+# required for the third fft dimension, as the values would be the same
+# for a vector in the exact opposite direction (with all vector
+# components of opposite sign).
+s4 = np.zeros((n_stypes, 2*size_ft - 1, 2*size_ft - 1, size_ft), dtype=np.float64)
+
+# Arrays for temporarily holding values of cosines and sines of
+# particle positions for a given set of q values, used to calculate
+# full matrix of S4 self part values for each q vector.
+ft_x_edge = np.empty((2, size_ft, frames.particles), dtype=np.float64)
+ft_y_edge = np.empty((2, size_ft, frames.particles), dtype=np.float64)
+ft_z_edge = np.empty((2, size_ft, frames.particles), dtype=np.float64)
 
 # W function values for each particle and for both initial and end
 # values
-if wtype == wtypes.theta:
-  w = np.empty((2, particles), dtype=np.int8)
+if wcalc.wtype == lib.wcalc.wtypes.theta:
+  w = np.empty((2, frames.particles), dtype=np.int8)
 else:
-  w = np.empty((2, particles), dtype=np.float8)
-
-# Find center of mass of each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-for i in range(0, n_frames):
-  which_file = np.searchsorted(fileframes, start + i, side="right") - 1
-  offset = start + i - fileframes[which_file]
-  for j in range(0, n_runs):
-    if particle_limit == None:
-      dcdfiles[j][which_file].gdcdp(x0, y0, z0, offset)
-      cm[j][i][0] = np.mean(x0)
-      cm[j][i][1] = np.mean(y0)
-      cm[j][i][2] = np.mean(z0)
-    else:
-      dcdfiles[j][which_file].gdcdp(x, y, z, offset)
-      cm[j][i][0] = np.mean(x[:particles])
-      cm[j][i][1] = np.mean(y[:particles])
-      cm[j][i][2] = np.mean(z[:particles])
-
-# Accumulates squared values of structure factor component across runs.
-# First dimension is stype (total or self), second is q value index,
-# third is spatial dimension.
-ab_accum = np.empty((2, n_q, 3), dtype=np.float64)
-
-def calculate_w(wa, run, xa0, ya0, za0, xa1, ya1, za1, index1, index2):
-  # Get values for start of w function
-  which_file = np.searchsorted(fileframes, index1, side="right") - 1
-  offset = index1 - fileframes[which_file]
-  if particle_limit == None:
-    dcdfiles[run][which_file].gdcdp(xa0, ya0, za0, offset)
-  else:
-    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xa0[:] = x[:particles]
-    ya0[:] = y[:particles]
-    za0[:] = z[:particles]
-
-  # Get values for end of w function
-  which_file = np.searchsorted(fileframes, index2, side="right") - 1
-  offset = index2 - fileframes[which_file]
-  if particle_limit == None:
-    dcdfiles[run][which_file].gdcdp(xa1, ya1, za1, offset)
-  else:
-    dcdfiles[run][which_file].gdcdp(x, y, z, offset)
-    xa1[:] = x[:particles]
-    ya1[:] = y[:particles]
-    za1[:] = z[:particles]
-
-  # Correct for center of mass
-  xa0 -= cm[run][index1][0]
-  ya0 -= cm[run][index1][1]
-  za0 -= cm[run][index1][2]
-  xa1 -= cm[run][index2][0]
-  ya1 -= cm[run][index2][1]
-  za1 -= cm[run][index2][2]
-
-  # Calculate w function for each particle
-  if wtype == wtypes.theta:
-    wa[:] = np.less((xa1 - xa0)**2 +
-                    (ya1 - ya0)**2 +
-                    (za1 - za0)**2, radius**2).astype(np.int8, copy=False)
-  elif wtype == wtypes.gauss:
-    wa[:] = np.exp(-((xa1 - xa0)**2 +
-                     (ya1 - ya0)**2 +
-                     (za1 - za0)**2)/(2 * gscale**2))
-  elif wtype == wtypes.exp:
-    wa[:] = np.exp(-np.sqrt((xa1 - xa0)**2 +
-                            (ya1 - ya0)**2 +
-                            (za1 - za0)**2)/sscale)
-
-# Iterate over starting points for structure factor
-for i in np.arange(0, n_frames - (tb - tc), framediff):
-  # Iterate over ending points for structure factor and add to
-  # accumulated structure factor, making sure to only use indices
-  # which are within the range of the files. j is used as t_a.
-  for index, ta in enumerate(lags):
-    if ta < (tc - i) or ta >= (n_frames - i - tb):
-      continue
-
-    # Clear run accumulators.
-    ab_accum[:] = 0.0
-
-    # Iterate over files
-    for k in range(0, n_runs):
-      # Calculate w values for t3 and t4
-      calculate_w(w[0], k, x0, y0, z0, x1, y1, z1, i, i + tb - tc)
-
-      # Calculate w values for t1 and t2
-      calculate_w(w[1], k, x2, y2, z2, x3, y3, z3, i + ta - tc, i + ta + tb)
-
-      for qindex, q in enumerate(qs):
-        # Calculate and accumulate values for total s4. Simulate
-        # complex multiplication, since using complex numbers with
-        # numpy imposes a very large performance penalty.
-        ab_accum[stypes.total.value][qindex][0] += (np.sum(w[0] * np.cos(q * x0)) * np.sum(w[1] * np.cos(q * x2)) -
-                                                    np.sum(w[0] * np.sin(-q * x0)) * np.sum(w[1] * np.sin(q * x2)))
-        ab_accum[stypes.total.value][qindex][1] += (np.sum(w[0] * np.cos(q * y0)) * np.sum(w[1] * np.cos(q * y2)) -
-                                                    np.sum(w[0] * np.sin(-q * y0)) * np.sum(w[1] * np.sin(q * y2)))
-        ab_accum[stypes.total.value][qindex][2] += (np.sum(w[0] * np.cos(q * z0)) * np.sum(w[1] * np.cos(q * z2)) -
-                                                    np.sum(w[0] * np.sin(-q * z0)) * np.sum(w[1] * np.sin(q * z2)))
-
-        # Calculate and accumulate values for self part of s2
-        ab_accum[stypes.self.value][qindex][0] += np.sum(w[0] * w[1] * np.cos(q * (x0 - x2)))
-        ab_accum[stypes.self.value][qindex][1] += np.sum(w[0] * w[1] * np.cos(q * (y0 - y2)))
-        ab_accum[stypes.self.value][qindex][2] += np.sum(w[0] * w[1] * np.cos(q * (z0 - z2)))
-
-    # Normalize accumulators by number of runs to obtain expectation
-    # values
-    ab_accum /= n_runs
-
-    # Calculate the variance for the current index and add it to the
-    # accumulator entry corresponding to the value of t_b
-    s4[stypes.total.value][index] += ab_accum[stypes.total.value] / particles
-    s4[stypes.self.value][index] += ab_accum[stypes.self.value] / particles
-
-    # Accumulate the normalization value for this lag value, which
-    # we will use later in computing the mean value for each t_b
-    norm[index] += 1
-
-  print("Processed frame %d" %(i + start + 1), file=sys.stderr)
+  w = np.empty((2, frames.particles), dtype=np.float64)
 
 print("#dt = %d" %framediff)
-print("#n_lags = %d" %n_lags)
+print("#n_lags = %d" %lags.size)
 print("#t_b = %d" %tb)
 print("#t_c = %d" %tc)
 
-if wtype == wtypes.theta:
-  print("#w function type: Threshold")
-  print("#a = %f" %radius)
-elif wtype == wtypes.gauss:
-  print("#w function type: Gaussian")
-  print("#a = %f" %gscale)
-elif wtype == wtypes.exp:
-  print("#w function type: Single Exponential")
-  print("#a = %f" %sscale)
+# Print information about w function calculation
+wcalc.print_info()
 
-# Find the distinct component of the variance by subtracting the self
-# part from the total.
-s4[stypes.distinct.value] = s4[stypes.total.value] - s4[stypes.self.value]
+# Find center of mass for each frame
+print("Finding centers of mass for frames", file=sys.stderr)
+frames.generate_cm()
 
-# Normalize the accumulated values, thereby obtaining averages over
-# each pair of frames
-s4 /= norm.reshape((n_lags, 1, 1))
+# S4 calcuation
 
-for stype in stypes:
-  if stype == stypes.total:
-    label = "total"
-  elif stype == stypes.self:
-    label = "self"
-  elif stype == stypes.distinct:
-    label = "distinct"
+print("Entering S4 calculation", file=sys.stderr)
 
-  for qindex, q in enumerate(qs):
-    for i in range(0, n_lags):
-      time_ta = lags[i] * timestep * tbsave
-      s4i = s4[stype.value][i][qindex]
-      # Print stype, t_a, q value, x, y, and z averages, number of
-      # frame sets contributing to such average, and frame difference
-      # corresponding to t_a
-      print("%s %f %f %f %f %f %d %d" %(label, q, time_ta, s4i[0], s4i[1], s4i[2], norm[i], lags[i]))
+# If output files not used, write to stdout
+if dumpfiles == False:
+  outfile = sys.stdout
+
+# Iterate over lags (t_a)
+for index, ta in enumerate(lags):
+  # Clear lag accumulator
+  s4[:, :, :, :] = 0.0
+
+  # Normalization factor for number of frame pairs contributing to
+  # current lag value
+  norm = 0
+
+  # Iterate over runs
+  for i in range(0, runset.n_runs):
+    # Clear run accumulators
+    run_self_s4[:, :, :] = 0.0
+    run_total_s4[:, :, :] = 0.0
+
+    # Iterate over starting points for structure factor
+    for j in np.arange(0, initend - frames.start, framediff):
+      # Use only indices that are within range
+      if (ta < (tc - j) or
+          ta - frames.n_frames >= (tc - j) or
+          ta < (-tb - j) or
+          ta - frames.n_frames >= (-tb - j) or
+          j < (tc - tb) or
+          j - frames.n_frames >= (tc - tb)):
+        continue
+
+      # Get particle coordinates and calculate w values for first and
+      # second intervals
+      wcalc.calculate_w(w[0], j, x0, y0, z0, j + tb - tc, x1, y1, z1, i)
+      wcalc.calculate_w(w[1], j + ta - tc, x2, y2, z2, j + ta + tb, x1, y1, z1, i)
+
+      # Complex multiplication is simulated with sin and cos, since
+      # using complex numbers with numpy imposes a large performance
+      # penalty.
+
+      # Generate edges for 3-dimensional Fourier transform for self
+      # part
+      for k, q in enumerate(qs):
+        ft_x_edge[0][k] = np.cos(q * (x0 - x2))
+        ft_x_edge[1][k] = np.sin(q * (x0 - x2))
+        ft_y_edge[0][k] = np.cos(q * (y0 - y2))
+        ft_y_edge[1][k] = np.sin(q * (y0 - y2))
+        ft_z_edge[0][k] = np.cos(q * (z0 - z2))
+        ft_z_edge[1][k] = np.sin(q * (z0 - z2))
+
+      # Calculate self part of S4 using edge arrays
+      for k in range(0, size_ft):
+        for l in range(0, size_ft):
+          for m in range(0, size_ft):
+            # Calculate real components of S4 that are even and odd
+            # with regard to signs of different components of q
+            even_s4r = np.mean(w[0] * w[1] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
+            even_s4r -= np.mean(w[0] * w[1] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
+            oddx_s4r = -np.mean(w[0] * w[1] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
+            oddy_s4r = -np.mean(w[0] * w[1] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
+
+            # Complete 4 corresponding values of S4 by combining
+            # computed values
+            run_self_s4[size_ft-1+k,size_ft-1+l,m] += even_s4r + oddx_s4r + oddy_s4r
+            if l != 0:
+              run_self_s4[size_ft-1+k,size_ft-1-l,m] += even_s4r + oddx_s4r - oddy_s4r
+            if k != 0:
+              run_self_s4[size_ft-1-k,size_ft-1+l,m] += even_s4r - oddx_s4r + oddy_s4r
+            if l != 0 and k != 0:
+              run_self_s4[size_ft-1-k,size_ft-1-l,m] += even_s4r - oddx_s4r - oddy_s4r
+
+      # Generate edges for 3-dimensional Fourier transform for end term
+      # of total part of S4
+      for k, q in enumerate(qs):
+        ft_x_edge[0][k] = np.cos(q * -x2)
+        ft_x_edge[1][k] = np.sin(q * -x2)
+        ft_y_edge[0][k] = np.cos(q * -y2)
+        ft_y_edge[1][k] = np.sin(q * -y2)
+        ft_z_edge[0][k] = np.cos(q * -z2)
+        ft_z_edge[1][k] = np.sin(q * -z2)
+
+      # Calculate end term of total part of S4 using edge arrays
+      for k in range(0, size_ft):
+        for l in range(0, size_ft):
+          for m in range(0, size_ft):
+            # Calculate real and imaginary components of S4 that are
+            # even and odd with regard to signs of different components
+            # of q
+            even_s4r = np.mean(w[0] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
+            even_s4r -= np.mean(w[0] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
+            oddx_s4r = -np.mean(w[0] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
+            oddy_s4r = -np.mean(w[0] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
+            even_s4i = -np.mean(w[0] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
+            even_s4i += np.mean(w[0] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
+            oddx_s4i = np.mean(w[0] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
+            oddy_s4i = np.mean(w[0] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
+
+            # Complete 4 corresponding values of S4 by combining
+            # computed values
+            lag_total_s4[0][size_ft-1+k,size_ft-1+l,m] = even_s4r + oddx_s4r + oddy_s4r
+            lag_total_s4[1][size_ft-1+k,size_ft-1+l,m] = even_s4i + oddx_s4i + oddy_s4i
+            if l != 0:
+              lag_total_s4[0][size_ft-1+k,size_ft-1-l,m] = even_s4r + oddx_s4r - oddy_s4r
+              lag_total_s4[1][size_ft-1+k,size_ft-1-l,m] = even_s4i + oddx_s4i - oddy_s4i
+            if k != 0:
+              lag_total_s4[0][size_ft-1-k,size_ft-1+l,m] = even_s4r - oddx_s4r + oddy_s4r
+              lag_total_s4[1][size_ft-1-k,size_ft-1+l,m] = even_s4i - oddx_s4i + oddy_s4i
+            if l != 0 and k != 0:
+              lag_total_s4[0][size_ft-1-k,size_ft-1-l,m] = even_s4r - oddx_s4r - oddy_s4r
+              lag_total_s4[1][size_ft-1-k,size_ft-1-l,m] = even_s4i - oddx_s4i - oddy_s4i
+
+      # Generate edges for 3-dimensional Fourier transform for start
+      # term of total part of S4
+      for k, q in enumerate(qs):
+        ft_x_edge[0][k] = np.cos(q * x0)
+        ft_x_edge[1][k] = np.sin(q * x0)
+        ft_y_edge[0][k] = np.cos(q * y0)
+        ft_y_edge[1][k] = np.sin(q * y0)
+        ft_z_edge[0][k] = np.cos(q * z0)
+        ft_z_edge[1][k] = np.sin(q * z0)
+
+      # Mutliply total part of S4 by start term using edge arrays.
+      # Calculate only real part, as only the real part of the result
+      # is used
+      for k in range(0, size_ft):
+        for l in range(0, size_ft):
+          for m in range(0, size_ft):
+            # Calculate real components of S4 that are even and odd
+            # with regard to signs of different components of q
+            even_s4r = np.sum(w[0] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
+            even_s4r -= np.sum(w[0] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
+            oddx_s4r = -np.sum(w[0] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
+            oddy_s4r = -np.sum(w[0] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
+
+            # Complete and multiply 4 corresponding values of S4 by
+            # combining computed values
+            lag_total_s4[0][size_ft-1+k,size_ft-1+l,m] *= even_s4r + oddx_s4r + oddy_s4r
+            if l != 0:
+              lag_total_s4[0][size_ft-1+k,size_ft-1-l,m] *= even_s4r + oddx_s4r - oddy_s4r
+            if k != 0:
+              lag_total_s4[0][size_ft-1-k,size_ft-1+l,m] *= even_s4r - oddx_s4r + oddy_s4r
+            if l != 0 and k != 0:
+              lag_total_s4[0][size_ft-1-k,size_ft-1-l,m] *= even_s4r - oddx_s4r - oddy_s4r
+
+      # Accumulate computed total S4 for lag value to value for run
+      run_total_s4 += lag_total_s4[0]
+
+      # Accumulate the normalization value for this lag, which will be
+      # used later in computing the mean S4 quantities for each lag
+      if i == 0:
+        norm += 1
+
+    # Calculate distinct part of S4 for current run
+    run_distinct_s4 = run_total_s4 - run_self_s4
+
+    # Normalize the accumulated values, thereby obtaining averages over
+    # each pair of frames
+    run_total_s4 /= norm
+    run_self_s4 /= norm
+    run_distinct_s4 /= norm
+
+    # Accumulate total, self, and distinct averages for run
+    s4[stypes.total.value] += run_total_s4
+    s4[stypes.self.value] += run_self_s4
+    s4[stypes.distinct.value] += run_distinct_s4
+
+    # Accumulate squares of total, self, and distinct averages for run,
+    # holding variances for eventual calculation of standard deviation
+    s4[stypes.totalstd.value] += run_total_s4**2
+    s4[stypes.selfstd.value] += run_self_s4**2
+    s4[stypes.distinctstd.value] += run_distinct_s4**2
+
+  # Normalize S4 values across runs
+  s4 /= runset.n_runs
+
+  # Calculate standard deviations from normalized variances over runs
+  s4[stypes.totalstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.totalstd.value] - s4[stypes.total.value]**2) / (runset.n_runs - 1))
+  s4[stypes.selfstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.selfstd.value] - s4[stypes.self.value]**2) / (runset.n_runs - 1))
+  s4[stypes.distinctstd.value] = np.sqrt(np.maximum(0.0, s4[stypes.distinctstd.value] - s4[stypes.distinct.value]**2) / (runset.n_runs - 1))
+
+  # Print results for current lag
+
+  # Lag time in real units
+  time_ta = ta * trajset.timestep * trajset.tbsave
+
+  # If output files used, open file for current lag
+  if dumpfiles == True:
+    outfile = open("lag_%f" %(lags[index]), "w")
+
+  # If q vector shells used, sort by q vector magnitude into onion
+  # shells and discrete magnitudes and print the averages of values for
+  # each
+  if qshell_active == True:
+    discrete_s4, shell_s4 = qshell.to_shells(s4)
+
+    # Print output columns for first region disctinct q magnitudes:
+    # 1 - t_a
+    # 2 - q vector magnitude
+    # 3 - number of q vectors with given magnitude
+    # 4 - S4 total component run average
+    # 5 - S4 self component run average
+    # 6 - S4 distinct component run average
+    # 7 - S4 total component standard deviation
+    # 8 - S4 self component standard deviation
+    # 9 - S4 distinct component standard deviation
+    # 10 - number of frame sets in each run contributing to
+    #      average of quantities
+    # 11 - frame difference corresponding to t_a
+    for i in range(0, discrete_s4.shape[-1]):
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                           qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
+                                                           qshell.qnorm_discrete_sorted[i],
+                                                           discrete_s4[stypes.total.value][i],
+                                                           discrete_s4[stypes.self.value][i],
+                                                           discrete_s4[stypes.distinct.value][i],
+                                                           discrete_s4[stypes.totalstd.value][i],
+                                                           discrete_s4[stypes.selfstd.value][i],
+                                                           discrete_s4[stypes.distinctstd.value][i],
+                                                           norm,
+                                                           ta))
+
+    # Print output columns for second region q magnitude onion shells:
+    # 1 - t_a
+    # 2 - q magnitude of midpoint of onion shells
+    # 3 - number of q vectors within magnitude range of shell
+    # 4 - S4 total component run average
+    # 5 - S4 self component run average
+    # 6 - S4 distinct component run average
+    # 7 - S4 total component standard deviation
+    # 8 - S4 self component standard deviation
+    # 9 - S4 distinct component standard deviation
+    # 10 - number of frame sets in each run contributing to
+    #      average of quantities
+    # 11 - frame difference corresponding to t_a
+    for i in range(0, shell_s4.shape[-1]):
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                           (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
+                                                           qshell.qnorm_shells[i],
+                                                           shell_s4[stypes.total.value][i],
+                                                           shell_s4[stypes.self.value][i],
+                                                           shell_s4[stypes.distinct.value][i],
+                                                           shell_s4[stypes.totalstd.value][i],
+                                                           shell_s4[stypes.selfstd.value][i],
+                                                           shell_s4[stypes.distinctstd.value][i],
+                                                           norm,
+                                                           ta))
+
+  # If q vector shells not used, print all elements
+  else:
+    for i in range(0, 2*size_ft - 1):
+      for j in range(0, 2*size_ft - 1):
+        for k in range(0, size_ft):
+          # Print output columns:
+          # 1 - t_a
+          # 2 - x component of fft frequency
+          # 3 - y component of fft frequency
+          # 4 - z component of fft frequency
+          # 5 - S4 total component run average
+          # 6 - S4 self component run average
+          # 7 - S4 distinct component run average
+          # 8 - S4 total component standard deviation
+          # 9 - S4 self component standard deviation
+          # 10 - S4 distinct component standard deviation
+          # 11 - number of frame sets in each run contributing to
+          #      average of quantities
+          # 12 - frame difference corresponding to t_a
+          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n" %(time_ta,
+                                                                  qs_full[i],
+                                                                  qs_full[j],
+                                                                  qs[k],
+                                                                  s4[stypes.total.value][i][j][k],
+                                                                  s4[stypes.self.value][i][j][k],
+                                                                  s4[stypes.distinct.value][i][j][k],
+                                                                  s4[stypes.totalstd.value][i][j][k],
+                                                                  s4[stypes.selfstd.value][i][j][k],
+                                                                  s4[stypes.distinctstd.value][i][j][k],
+                                                                  norm,
+                                                                  ta))
+
+  # If output files for each lag used, close file for this lag
+  if dumpfiles == True:
+    outfile.close()

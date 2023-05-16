@@ -1,26 +1,6 @@
 import numpy as np
 import sys
 
-# List of short and long options processed by this module, used by
-# gnu_getopt()
-shortopts = "fg:w:"
-longopts = ["low-interval", "high-interval", "negvals"]
-
-def usage():
-  """
-  Print help documentation for options processed by the progression
-  module.
-  """
-  print("Interval increase progression (last specified is used):",
-        "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
-        "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is number of lags)",
-        "-w Linear progression (argument is spacing between interval length values)",
-        "Interval progression modifiers:",
-        "--low-interval Trim set of interval lengths below frame number value",
-        "--high-interval Trim set of interval lengths above frame number value",
-        "--negvals Add mirrored sequence of negative length intervals",
-        sep="\n", file=sys.stderr)
-
 # Progression types
 
 class flenner():
@@ -75,8 +55,20 @@ class prog():
                    negative value.
     low_interval: int - Lower limit for values, used for trimming
                         values after generation.
-    high_interval: int- Upper limit for values, used for trimming
-                        values after generation.
+    high_interval: int - Upper limit for values, used for trimming
+                         values after generation.
+    adj_seq: np.array() - Array of values to which progression values
+                          are to be adjusted to the closest value in on
+                          a linear or logarithmic scale. Must be
+                          pre-sorted.
+    adj_log: bool - If true, values are to be adjusted to the closest
+                    value of adj_seq on a logarithmic scale. Otherwise,
+                    values are adjusted to closest value on a linear
+                    scale.
+    shortopts: str - List of short options processed by this module,
+                     used by gnu_getopt()
+    longopts: str - List of long options processed by this module, used
+                    by gnu_getopt()
   """
   progtype = None
   max_val = None
@@ -85,6 +77,12 @@ class prog():
 
   low_interval = None
   high_interval = None
+
+  adj_seq = None
+  adj_log = False
+
+  shortopts = "fg:w:"
+  longopts = ["low-interval", "high-interval", "negvals"]
 
   def sequence(self, seq_val):
     """
@@ -122,13 +120,15 @@ class prog():
       geom_base = seq_val**(1.0 / self.progtype.geom_num)
 
       # Create array of values following geometric progression, with
-      # flooring to have values adhere to integer boundaries, removing
-      # duplicate numbers, and prepending 0
-      vals = np.insert(np.unique(np.floor(np.logspace(0, self.progtype.geom_num, num=(self.progtype.geom_num + 1), base=geom_base)).astype(np.int64)), 0, 0)
+      # prepending of 0
+      vals = np.insert(np.logspace(0, self.progtype.geom_num, num=(self.progtype.geom_num + 1), base=geom_base), 0, 0)
 
     elif type(self.progtype) == linear:
       # Create evenly spaced array of values with specified spacing
       vals = np.arange(0, seq_val + 1, step=self.progtype.spacing)
+
+    elif self.progtype == None:
+      raise RuntimeError("Must specify interval increase progression type")
 
     else:
       raise RuntimeError("Progression type not recognized")
@@ -138,22 +138,88 @@ class prog():
   def construct(self):
     """
     Function for generating a series of values according to specified
-    parameters. This is designed to be called by the user.
+    parameters. This is designed to be called by the user. If adj_seq
+    has been specified, return list of indices in adj_seq rather than
+    the values themselves.
     """
     # Create main sequence of positive values
-    vals = self.sequence(self.max_val)
+    vals = self.sequence(int(self.max_val))
 
     # Append negative values if specified
     if self.neg_vals == True:
-      vals = np.concatenate((np.flip(-self.sequence(-self.min_val)[1:]), vals))
+      vals = np.concatenate((np.flip(-self.sequence(-int(self.min_val))[1:]), vals))
 
-    # Trim values to specified limits
-    if self.low_interval != None:
-      vals = vals[vals >= self.low_interval]
-    if self.high_interval != None:
-      vals = vals[vals <= self.high_interval]
+    # If a set of numbers to adjust values closest to in linear or
+    # logarithmic scales is given, adjust values. Otherwise, adjust to
+    # fit on integer boundaries.
+    if self.adj_seq is not None:
+      if self.adj_log == False:
+        # Find index of closest value in adj_seq less than or equal to
+        # vals
+        adj_leftidx = np.searchsorted(self.adj_seq, vals, side='left') - 1
 
-    return vals
+        # Keep index or adjust to next, based on which difference is
+        # greater. For smallest adj_seq value, since low value for
+        # comparison cannot be provided, trim index to remain within
+        # array boundaries, and trim output to ensure valid adj_idx.
+        adj_idx = np.clip(adj_leftidx + np.greater((vals - self.adj_seq[np.maximum(adj_rightidx, 0)]),
+                                                   (self.adj_seq[adj_rightidx + 1] - vals)).astype(np.int64), 0, len(adj_seq_pos) - 1)
+      else:
+        # Separate adj_seq and vals arrays into positive, negative, and
+        # zero components for comparison of logarithms
+        adj_seq_neg = self.adj_seq[self.adj_seq < 0.0]
+        adj_seq_zero = self.adj_seq[self.adj_seq == 0.0]
+        adj_seq_pos = self.adj_seq[self.adj_seq > 0.0]
+        vals_neg = vals[vals < 0.0]
+        vals_zero = vals[vals == 0.0]
+        vals_pos = vals[vals > 0.0]
+
+        # Find index of logarithmically closest value in adj_seq less
+        # than or equal to vals
+        adj_leftidx_neg = np.searchsorted(np.log(-adj_seq_neg), np.log(vals_neg), side='left') - 1
+        if len(adj_seq_zero) != 0:
+          adj_idx_zero = np.array((0, ))
+        else:
+          adj_idx_zero = np.array(())
+        adj_leftidx_pos = np.searchsorted(np.log(adj_seq_pos), np.log(vals_pos), side='left') - 1
+
+        # Keep index or adjust to next, based on which difference is
+        # greater. For largest and smallest adj_seq values, trim input
+        # indices to stay within bounds of adj_seq array. Clip output
+        # indices, which may be outside of bounds due to input
+        # trimming.
+        adj_idx_pos = np.clip(adj_leftidx_pos + np.greater((np.log(vals_pos) - np.log(adj_seq_pos[np.maximum(adj_leftidx_pos, 0)])),
+                                                           (np.log(adj_seq_pos[np.minimum(adj_leftidx_pos + 1, len(adj_seq_pos) - 1)]) - np.log(vals_pos))).astype(np.int64), 0, len(adj_seq_pos) - 1)
+        adj_idx_neg = np.clip(adj_leftidx_neg + np.greater((np.log(-vals_neg) - np.log(-adj_seq_neg[np.maximum(adj_leftidx_neg, 0)])),
+                                                           (np.log(-adj_seq_neg[np.minimum(adj_leftidx_neg + 1, len(adj_seq_neg) - 1)]) - np.log(-vals_neg))).astype(np.int64), 0, len(adj_seq_pos) - 1)
+
+        # Convert index values in vals back to indices to adj_seq
+        adj_idx_zero += len(adj_seq_neg)
+        adj_idx_pos += len(adj_seq_neg) + len(adj_seq_zero)
+
+        # Create combined adj_idx array
+        adj_idx = np.concatenate((adj_idx_neg, adj_idx_zero, adj_idx_pos))
+
+      # Trim adj_seq indices to those that correspond to values within
+      # specified limits
+      if self.low_interval != None:
+        adj_idx = adj_idx[self.adj_seq[adj_idx] >= self.low_interval]
+      if self.high_interval != None:
+        adj_idx = adj_idx[self.adj_seq[adj_idx] <= self.high_interval]
+
+      return np.unique(adj_idx)
+    else:
+      # Round values down to lowest-magnitude integer and eliminate
+      # duplicate values
+      vals = np.unique(np.fix(vals).astype(np.int64))
+
+      # Trim values to specified limits
+      if self.low_interval != None:
+        vals = vals[vals >= self.low_interval]
+      if self.high_interval != None:
+        vals = vals[vals <= self.high_interval]
+
+      return vals
 
   # Determine if option corresponds to this module and process it if so.
   # Returns True if option matched and processed.
@@ -172,7 +238,7 @@ class prog():
     if o == "-f":
       self.progtype = flenner()
     elif o == "-g":
-      self.progtype = geom(int(a))
+      self.progtype = geometric(int(a))
     elif o == "-w":
       self.progtype = linear(int(a))
     elif o == "--low-interval":
@@ -186,3 +252,18 @@ class prog():
       return False
 
     return True
+
+  def usage(self):
+    """
+    Print help documentation for options processed by the progression
+    module.
+    """
+    print("Interval increase progression (last specified is used):",
+          "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
+          "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is number of interval length values)",
+          "-w Linear progression (argument is spacing between interval length values)",
+          "Interval progression modifiers:",
+          "--low-interval Trim set of interval lengths below frame number value",
+          "--high-interval Trim set of interval lengths above frame number value",
+          "--negvals Add mirrored sequence of negative length intervals",
+          sep="\n", file=sys.stderr)

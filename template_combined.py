@@ -7,309 +7,178 @@ import enum
 
 # Import functionality from local library directory
 import lib.opentraj
+import lib.progression
+import lib.frame
 
-def usage():
-  print("Arguments:",
-        "-n Number of files",
-        "-r Number of runs, numbered as folders. Script must be run from directory with run directories if specified.",
-        "-s Frame number to start on (index starts at 1)",
-        "-k Last frame number in range to use for initial times (index starts at 1)",
-        "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
-        "-d Number of frames between starts of pairs to average (dt)",
-        "-a Overlap radius for theta function (default: 0.25)",
-        "-q Scattering vector constant (default: 7.25)",
-        "-o Start index (from 1) of particles to limit analysis to",
-        "-p End index (from 1) of particles to limit analysis to",
-        "-h Print usage",
-        "Interval increase progression (last specified is used):",
-        "-f Flenner-style periodic-exponential-increasing increment (iterations: 50, power: 5)",
-        "-g Geometric spacing progression, selectively dropped to fit on integer frames (argument is geometric base)",
-        "Interval increase progression modifiers:",
-        "--low-interval Trim set of interval lengths below frame number difference value",
-        "--high-interval Trim set of interval lengths above frame number difference value",
-        sep="\n", file=sys.stderr)
-
-try:
-  opts, args = getopt.gnu_getopt(sys.argv[1:], "n:r:s:k:m:d:a:q:o:p:hfg:", ["low-interval=", "high-interval="])
-except getopt.GetoptError as err:
-  print(err, file=sys.stderr)
-  usage()
-  sys.exit(1)
-
-class progtypes(enum.Enum):
-  flenner = 1
-  geometric = 2
-
-# Total number of trajectory files
-n_files = 1
-# Number of runs
-n_runs = 1
-# Whether multiple runs are being used, multiple runs imply script must
-# be run in directory with run directories
-rundirs = False
-# What frame number to start on
-start = 0
 # Last frame number to use for initial times
 initend = None
-# Last frame number to use for either final or initial times
-final = None
 # Difference between frame pair starts
 framediff = 10
 # Overlap radius for theta function
 radius = 0.25
 # Scattering vector constant
 q = 7.25
-# Whether to limit analysis to subset of particles, and upper and lower
-# indices for limit.
-limit_particles = False
-upper_limit = None
-lower_limit = None
-# Type of progression to increase time interval by
-progtype = progtypes.flenner
-# Limits of interval lengths to use
-low_interval = None
-high_interval = None
+# Progression specification/generation object for lags
+prog = lib.progression.prog()
+# Run set opening object
+runset = lib.opentraj.runset()
+# Trajectory set opening object
+trajset = lib.opentraj.trajset(runset)
+# Frame reading object
+frames = lib.frame.frames(trajset)
+
+def usage():
+  print("Arguments:", file=sys.stderr)
+  runset.usage()
+  trajset.usage()
+  frames.usage()
+  print("-k Last frame number in range to use for initial times (index starts at 1)",
+        "-d Number of frames between starts of pairs to average (dt)",
+        "-a Overlap radius for theta function (default: 0.25)",
+        "-q Scattering vector constant (default: 7.25)",
+        "-h Print usage",
+        sep="\n", file=sys.stderr)
+  prog.usage()
+
+try:
+  opts, args = getopt.gnu_getopt(sys.argv[1:], "k:d:a:q:h" +
+                                               runset.shortopts +
+                                               trajset.shortopts +
+                                               frames.shortopts +
+                                               prog.shortopts,
+                                               prog.longopts)
+except getopt.GetoptError as err:
+  print(err, file=sys.stderr)
+  usage()
+  sys.exit(1)
 
 for o, a in opts:
   if o == "-h":
     usage()
     sys.exit(0)
-  elif o == "-n":
-    n_files = int(a)
-  elif o == "-r":
-    n_runs = int(a)
-    rundirs = True
-  elif o == "-s":
-    start = int(a) - 1
   elif o == "-k":
     initend = int(a)
-  elif o == "-m":
-    final = int(a)
   elif o == "-d":
     framediff = int(a)
   elif o == "-a":
     radius = float(a)
   elif o == "-q":
     q = float(a)
-  elif o == "-o":
-    limit_particles = True
-    lower_limit = int(a) - 1
-  elif o == "-p":
-    limit_particles = True
-    upper_limit = int(a)
-  elif o == "-f":
-    progtype = progtypes.flenner
-  elif o == "-g":
-    progtype = progtypes.geometric
-    geom_base = float(a)
-  elif o == "--low-interval":
-    low_interval = int(a)
-  elif o == "--high-interval":
-    high_interval = int(a)
+  elif runset.catch_opt(o, a) == True:
+    pass
+  elif trajset.catch_opt(o, a) == True:
+    pass
+  elif prog.catch_opt(o, a) == True:
+    pass
+  elif frames.catch_opt(o, a) == True:
+    pass
 
 # Open trajectory files
-if rundirs == True:
-  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj_multirun(n_runs, "run", n_files, "traj", 1, True)
+if runset.rundirs == True:
+  trajset.opentraj_multirun(1, True)
 else:
-  dcdfiles, fileframes, fparticles, timestep, tbsave = lib.opentraj.opentraj(n_files, "traj", 1, True)
-  dcdfiles = list((dcdfiles, ))
+  trajset.opentraj(1, True)
 
-# Limit particles if necessary
-if limit_particles == False:
-  particles = fparticles
-else:
-  if lower_limit == None:
-    lower_limit = 0
-  if upper_limit == None:
-    upper_limit = fparticles
+# Prepare frames object for calculation
+frames.prepare()
 
-  if lower_limit != 0 or upper_limit < fparticles:
-    particles = upper_limit - lower_limit
-  else:
-    particles = fparticles
-    limit_particles = False
-
-# Print basic properties shared across the files
-print("#nset: %d" %fileframes[-1])
-print("#N: %d" %particles)
-print("#timestep: %f" %timestep)
-print("#tbsave: %f" %tbsave)
+# Print basic properties of files and analysis
+print("#nset: %d" %frames.fileframes[-1])
+print("#N: %d" %frames.fparticles)
+print("#timestep: %f" %trajset.timestep)
+print("#tbsave: %f" %trajset.tbsave)
+print("#dt = %f" %framediff)
+print("#q = %f" %q)
+print("#a = %f" %radius)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = fileframes[-1]
+  initend = trajset.fileframes[-1]
 else:
-  if initend > fileframes[-1]:
+  if initend > trajset.fileframes[-1]:
     raise RuntimeError("End initial time frame beyond set of frames")
 
-# End of set of frames to used for both final and initial times
-if final == None:
-  final = fileframes[-1]
-else:
-  if final > fileframes[-1]:
-    raise RuntimeError("End limit time frame beyond set of frames")
+# Largest possible positive and negative lags
+prog.max_val = frames.n_frames - 1
+prog.min_val = -frames.n_frames + 1
 
-# Number of frames to analyze
-n_frames = final - start
-
-# Largest possible lag
-max_lag = n_frames - 1
-
-if progtype == progtypes.flenner:
-  # Construct list of lags according to a method of increasing spacing
-  magnitude = -1
-  frames_beyond_magnitude = max_lag
-  while frames_beyond_magnitude >= 50 * 5**(magnitude + 1):
-    magnitude += 1
-    frames_beyond_magnitude -= 50 * 5**magnitude
-
-  lags_beyond_magnitude = frames_beyond_magnitude // 5**(magnitude + 1)
-
-  n_lags = 1 + (50 * (magnitude + 1)) + lags_beyond_magnitude
-
-  # Allocate that array
-  lags = np.empty(n_lags, dtype=np.int64)
-
-  # Efficiently fill the array
-  lags[0] = 0
-  last_lag = 0
-  for i in range(0, magnitude + 1):
-    lags[1 + 50 * i : 1 + 50 * (i + 1)] = last_lag + np.arange(5**i , 51 * 5**i, 5**i)
-    last_lag += 50 * 5**i
-  lags[1 + 50 * (magnitude + 1) : n_lags] = last_lag + np.arange(5**(magnitude + 1), (lags_beyond_magnitude + 1) * 5**(magnitude + 1), 5**(magnitude + 1))
-
-elif progtype == progtypes.geometric:
-  # Largest power of geom_base that will be able to be used as a lag
-  # value
-  end_power = math.floor(math.log(max_lag, geom_base))
-
-  # Create array of lags following geometric progression, with flooring
-  # to have lags adhere to integer boundaries, removing duplicate
-  # numbers, and prepending 0
-  lags = np.insert(np.unique(np.floor(np.logspace(0, end_power, num=end_power + 1, base=geom_base)).astype(int)), 0, 0)
-
-  n_lags = lags.size
-
-# Trim lags list to specified limits
-if low_interval != None:
-  lags = lags[lags >= low_interval]
-  n_lags = lags.size
-if high_interval != None:
-  lags = lags[lags <= high_interval]
-  n_lags = lags.size
-
-# If particles limited, must be read into different array
-if limit_particles == True:
-  x = np.empty(fparticles, dtype=np.single)
-  y = np.empty(fparticles, dtype=np.single)
-  z = np.empty(fparticles, dtype=np.single)
+# Construct progression of interval values using previously-specified
+# parameters
+lags = prog.construct()
 
 # Stores coordinates of all particles in a frame
-x0 = np.empty(particles, dtype=np.single)
-y0 = np.empty(particles, dtype=np.single)
-z0 = np.empty(particles, dtype=np.single)
-x1 = np.empty(particles, dtype=np.single)
-y1 = np.empty(particles, dtype=np.single)
-z1 = np.empty(particles, dtype=np.single)
-
-# Center of mass of each frame
-cm = np.empty((n_runs, n_frames, 3), dtype=np.float64)
+x0 = np.empty(frames.particles, dtype=np.single)
+y0 = np.empty(frames.particles, dtype=np.single)
+z0 = np.empty(frames.particles, dtype=np.single)
+x1 = np.empty(frames.particles, dtype=np.single)
+y1 = np.empty(frames.particles, dtype=np.single)
+z1 = np.empty(frames.particles, dtype=np.single)
 
 # Accumulated msd value for each difference in times
-msd = np.zeros(n_lags, dtype=np.float64)
+msd = np.zeros(lags.size, dtype=np.float64)
 
 # Accumulated overlap value for each difference in times
-overlap = np.zeros(n_lags, dtype=np.float64)
+overlap = np.zeros(lags.size, dtype=np.float64)
 
 # Result of scattering function for each difference in times. In last
 # dimension, first three indexes are x, y, and z, and last index is
 # average between them.
-fc = np.zeros((n_lags, 4), dtype=np.float64)
+fc = np.zeros((lags.size, 4), dtype=np.float64)
 
 # Corresponding quantities for individual runs
-run_msd = np.empty(n_lags, dtype=np.float64)
-run_overlap = np.empty(n_lags, dtype=np.float64)
-run_fc = np.empty((n_lags, 4), dtype=np.float64)
+run_msd = np.empty(lags.size, dtype=np.float64)
+run_overlap = np.empty(lags.size, dtype=np.float64)
+run_fc = np.empty((lags.size, 4), dtype=np.float64)
 
-if rundirs == True:
+if runset.rundirs == True:
   # Corresponding arrays used for calculating standard deviations
   # across runs
-  std_msd = np.zeros(n_lags, dtype=np.float64)
-  std_overlap = np.zeros(n_lags, dtype=np.float64)
-  std_fc = np.zeros((n_lags, 4), dtype=np.float64)
+  std_msd = np.zeros(lags.size, dtype=np.float64)
+  std_overlap = np.zeros(lags.size, dtype=np.float64)
+  std_fc = np.zeros((lags.size, 4), dtype=np.float64)
 
 # Normalization factor for scattering indices
-norm = np.zeros(n_lags, dtype=np.int64)
+norm = np.zeros(lags.size, dtype=np.int64)
 
 # Find center of mass of each frame
 print("Finding centers of mass for frames", file=sys.stderr)
-for i in range(0, n_runs):
-  for j in range(0, n_frames):
-    which_file = np.searchsorted(fileframes, start + j, side="right") - 1
-    offset = start + j - fileframes[which_file]
-    if limit_particles == True:
-      dcdfiles[i][which_file].gdcdp(x, y, z, offset)
-      x0[:] = x[lower_limit:upper_limit]
-      y0[:] = y[lower_limit:upper_limit]
-      z0[:] = z[lower_limit:upper_limit]
-    else:
-      dcdfiles[i][which_file].gdcdp(x0, y0, z0, offset)
-
-    cm[i][j][0] = np.mean(x0)
-    cm[i][j][1] = np.mean(y0)
-    cm[i][j][2] = np.mean(z0)
+frames.generate_cm()
 
 # Iterate over runs
-for i in range(0, n_runs):
+for i in range(0, runset.n_runs):
   # Clear individual-run accumulators
   run_msd[:] = 0.0
   run_overlap[:] = 0.0
   run_fc[:] = 0.0
 
   # Iterate over starting points for functions
-  for j in np.arange(0, initend - start, framediff):
-    which_file = np.searchsorted(fileframes, start + j, side="right") - 1
-    offset = start + j - fileframes[which_file]
-    if limit_particles == True:
-      dcdfiles[i][which_file].gdcdp(x, y, z, offset)
-      x0[:] = x[lower_limit:upper_limit]
-      y0[:] = y[lower_limit:upper_limit]
-      z0[:] = z[lower_limit:upper_limit]
-    else:
-      dcdfiles[i][which_file].gdcdp(x0, y0, z0, offset)
+  for j in np.arange(0, initend - frames.start, framediff):
+    # Get interval start frame
+    frames.get_frame(j, x0, y0, z0, i)
 
     # Iterate over ending points for functions and add to
     # accumulated values, making sure to only use indices
     # which are within the range of the files.
     for index, k in enumerate(lags):
-      if k >= (n_frames - j):
+      if k >= (frames.n_frames - j) or k < -j:
         continue
 
-      which_file = np.searchsorted(fileframes, start + j + k, side="right") - 1
-      offset = start + j + k - fileframes[which_file]
-      if limit_particles == True:
-        dcdfiles[i][which_file].gdcdp(x, y, z, offset)
-        x1[:] = x[lower_limit:upper_limit]
-        y1[:] = y[lower_limit:upper_limit]
-        z1[:] = z[lower_limit:upper_limit]
-      else:
-        dcdfiles[i][which_file].gdcdp(x1, y1, z1, offset)
+      # Get interval end frame
+      frames.get_frame(j + k, x1, y1, z1, i)
 
       # Add msd value to accumulated value
-      run_msd[index] += np.mean(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
-                                ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
-                                ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2)
+      run_msd[index] += np.mean((x1 - x0)**2 + (y1 - y0)**2 + (z1 - z0)**2)
 
       # Add overlap value to accumulated value
-      run_overlap[index] += np.mean(np.less(((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))**2 +
-                                            ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))**2 +
-                                            ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))**2, radius**2).astype(int))
+      run_overlap[index] += np.mean(np.less((x1 - x0)**2 +
+                                            (y1 - y0)**2 +
+                                            (z1 - z0)**2, radius**2).astype(int))
 
       # Get means of scattering functions of all the particles for each
       # coordinate
-      run_fc[index][0] += np.mean(np.cos(q * ((x1 - cm[i][j + k][0]) - (x0 - cm[i][j][0]))))
-      run_fc[index][1] += np.mean(np.cos(q * ((y1 - cm[i][j + k][1]) - (y0 - cm[i][j][1]))))
-      run_fc[index][2] += np.mean(np.cos(q * ((z1 - cm[i][j + k][2]) - (z0 - cm[i][j][2]))))
+      run_fc[index][0] += np.mean(np.cos(q * (x1 - x0)))
+      run_fc[index][1] += np.mean(np.cos(q * (y1 - y0)))
+      run_fc[index][2] += np.mean(np.cos(q * (z1 - z0)))
 
       if i == 0:
         # Accumulate the normalization value for this lag, which we
@@ -317,11 +186,11 @@ for i in range(0, n_runs):
         # each lag
         norm[index] += 1
 
-    print("Processed frame %d in run %d" %(j + start + 1, i + 1), file=sys.stderr)
+    print("Processed frame %d in run %d" %(j + frames.start + 1, i + 1), file=sys.stderr)
 
   # Normalize the accumulated scattering values, thereby obtaining
   # averages over each pair of frames
-  run_fc[:, 0:3] /= norm.reshape((n_lags, 1))
+  run_fc[:, 0:3] /= norm.reshape((lags.size, 1))
 
   # Calculate directional average for scattering function
   run_fc[:, 3] = np.mean(run_fc[:, 0:3], axis=1)
@@ -339,41 +208,47 @@ for i in range(0, n_runs):
   msd += run_msd
   overlap += run_overlap
 
-  if rundirs == True:
+  if runset.rundirs == True:
     # Accumulate squares, to be later used for standard deviation
     # calculation
     std_fc += run_fc**2
     std_msd += run_msd**2
     std_overlap += run_overlap**2
 
-if rundirs == True:
+if runset.rundirs == True:
   # Normalize calculated values across runs
-  fc /= n_runs
-  msd /= n_runs
-  overlap /= n_runs
-  std_fc /= n_runs
-  std_msd /= n_runs
-  std_overlap /= n_runs
+  fc /= runset.n_runs
+  msd /= runset.n_runs
+  overlap /= runset.n_runs
+  std_fc /= runset.n_runs
+  std_msd /= runset.n_runs
+  std_overlap /= runset.n_runs
 
   # Calculate standard deviation with means and means of squares of
   # values
-  std_fc = np.sqrt(np.maximum(0.0, std_fc - fc**2) / (n_runs - 1))
-  std_msd = np.sqrt(np.maximum(0.0, std_msd - msd**2) / (n_runs - 1))
-  std_overlap = np.sqrt(np.maximum(0.0, std_overlap - overlap**2) / (n_runs - 1))
+  std_fc = np.sqrt(np.maximum(0.0, std_fc - fc**2) / (runset.n_runs - 1))
+  std_msd = np.sqrt(np.maximum(0.0, std_msd - msd**2) / (runset.n_runs - 1))
+  std_overlap = np.sqrt(np.maximum(0.0, std_overlap - overlap**2) / (runset.n_runs - 1))
 
-print("#dt = %f" %framediff)
-print("#q = %f" %q)
-print("#a = %f" %radius)
-
-for i in range(0, n_lags):
-  time = lags[i] * timestep * tbsave
-  if rundirs == True:
-    # Print time difference, msd, averarge overlap, x, y, and z
-    # scattering function averages, average of directional scattering
-    # functions, standard deviations of msd, averarge overlap, x, y,
-    # and z scattering function averages, average of directional
-    # scattering function standard deviations, number of frame sets
-    # contributing to such averages, and frame difference
+for i in range(0, lags.size):
+  time = lags[i] * trajset.timestep * trajset.tbsave
+  if runset.rundirs == True:
+    # Print output columns:
+    # 1 - time difference constituting interval
+    # 2 - mean squared displacement run average
+    # 3 - average overlap run average
+    # 4 - x scattering function run average
+    # 5 - y scattering function run average
+    # 6 - z scattering function run average
+    # 7 - directional average scattering function run average
+    # 8 - mean squared displacement standard deviation
+    # 9 - average overlap standard deviation
+    # 10 - x scattering function standard deviation
+    # 11 - y scattering function standard deviation
+    # 12 - z scattering function standard deviation
+    # 13 - directional average scattering function
+    # 14 - number of frame pairs in each run with interval
+    # 15 - frame difference corresponding to interval time
     print("%f %f %f %f %f %f %f %f %f %f %f %f %f %d %d" %(time,
                                                            msd[i],
                                                            overlap[i],
@@ -390,10 +265,16 @@ for i in range(0, n_lags):
                                                            norm[i],
                                                            lags[i]))
   else:
-    # Print time difference, msd, averarge overlap, x, y, and z
-    # scattering function averages, average of directional scattering
-    # functions, number of frame sets contributing to such averages,
-    # and frame difference
+    # Print output columns:
+    # 1 - time difference constituting interval
+    # 2 - mean squared displacement
+    # 3 - average overlap
+    # 4 - x scattering function
+    # 5 - y scattering function
+    # 6 - z scattering function
+    # 7 - directional average scattering function
+    # 8 - number of frame pairs with interval
+    # 9 - frame difference corresponding to interval time
     print("%f %f %f %f %f %f %f %d %d" %(time,
                                          msd[i],
                                          overlap[i],

@@ -2,19 +2,6 @@ import numpy as np
 import sys
 import enum
 
-# List of short options processed by this module, used by gnu_getopt()
-shortopts = "t:u:e:"
-
-def usage():
-  """
-  Print help documentation for options processed by the wcalc module.
-  """
-  print("w function types (last specified is used, must be specified):",
-        "-t Theta function threshold (argument is threshold radius)",
-        "-u Double negative exponential/Gaussian (argument is exponential length)",
-        "-e Single negative exponential (argument is exponential length)",
-        sep="\n", file=sys.stderr)
-
 class wtypes(enum.Enum):
   """
   Enumeration of types of w functions that can be used.
@@ -36,8 +23,11 @@ class wcalc():
     frames: frames - Frames object from which this wcalc object gets
                      particle data.
     wtype: wtypes - Type of w function to use
+    shortopts: str - List of short options processed by this module,
+                     used by gnu_getopt()
   """
   wtype = None
+  shortopts = "t:u:e:"
 
   def __init__(self, frames):
     """
@@ -48,6 +38,15 @@ class wcalc():
                        particle data
     """
     self.frames = frames
+
+  def prepare(self):
+    """
+    Verify that arguments for w calculation have been specified
+    sufficiently for further operations. Should be called after
+    argument processing.
+    """
+    if self.wtype == None:
+      raise RuntimeError("No w function type specified")
 
   # Get end frame values and calculate w, do not modify start frame
   # values
@@ -99,6 +98,24 @@ class wcalc():
     # Get end frame values and calculate w
     self.calculate_w_half(w, x0, y0, z0, t1, x1, y1, z1, run)
 
+  def print_info(self, outfile=sys.stdout):
+    """
+    Print information about w function used for calculation in format
+    of output files
+
+    Arguments:
+      outfile: io.TextIOWrapper - File to print to
+    """
+    if self.wtype == wtypes.theta:
+      outfile.write("#w function type: Threshold\n")
+      outfile.write("#a = %f\n" %self.radius)
+    elif self.wtype == wtypes.gauss:
+      outfile.write("#w function type: Gaussian\n")
+      outfile.write("#a = %f\n" %self.gscale)
+    elif self.wtype == wtypes.exp:
+      outfile.write("#w function type: Single Exponential\n")
+      outfile.write("#a = %f\n" %self.sscale)
+
   def catch_opt(self, o, a):
     """
     Determine if option corresponds to the wcalc module and process it
@@ -116,21 +133,22 @@ class wcalc():
       self.radius = float(a)
     elif o == "-u":
       self.wtype = wtypes.gauss
-      self.sscale = float(a)
+      self.gscale = float(a)
     elif o == "-e":
       self.wtype = wtypes.exp
-      self.gscale = float(a)
+      self.sscale = float(a)
     else:
       # Option not matched
       return False
 
     return True
 
-  def prepare(self):
+  def usage(self):
     """
-    Verify that arguments for w calculation have been specified
-    sufficiently for further operations. Should be called after
-    argument processing.
+    Print help documentation for options processed by the wcalc module.
     """
-    if self.wtype == None:
-      raise RuntimeError("No w function type specified")
+    print("w function types (last specified is used, must be specified):",
+          "-t Theta function threshold (argument is threshold radius)",
+          "-u Double negative exponential/Gaussian (argument is exponential length)",
+          "-e Single negative exponential (argument is exponential length)",
+          sep="\n", file=sys.stderr)

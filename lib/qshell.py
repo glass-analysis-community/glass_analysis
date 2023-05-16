@@ -2,19 +2,6 @@ import numpy as np
 import sys
 import math
 
-# List of short options processed by this module, used by gnu_getopt()
-shortopts = "q:v:l:"
-
-def usage():
-  """
-  Print help documentation for options processed by the qshell module.
-  """
-  print("q-vector shell sorting:",
-        "-q Upper boundary for first q region with discrete q values",
-        "-v Upper boundary for second q region divided into onion shells",
-        "-l Number of onion shells to use in second q region",
-        sep="\n", file=sys.stderr)
-
 class qshell():
   """
   Class used for sorting of q vectors into shells based on vector
@@ -70,7 +57,10 @@ class qshell():
                                 magnitude range.
     qnorm_shells: list(int) - Number of q vectors contributing to each
                               magnitude range in qlist_shells
+    shortopts: str - List of short options processed by this module,
+                     used by gnu_getopt()
   """
+  shortopts = "q:v:l:"
 
   def prepare(self, size_fft, box_size):
     """
@@ -243,3 +233,13 @@ class qshell():
       return False
 
     return True
+
+  def usage(self):
+    """
+    Print help documentation for options processed by the qshell module.
+    """
+    print("q-vector shell sorting:",
+          "-q Upper boundary for first q region with discrete q values",
+          "-v Upper boundary for second q region divided into onion shells",
+          "-l Number of onion shells to use in second q region",
+          sep="\n", file=sys.stderr)
