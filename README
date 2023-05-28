@@ -4,7 +4,7 @@ versions may be loaded on the following systems with:
 OSC Pitzer: module load python/3.7-2019.10
 NCSA Delta: module load python/3.10.4
 
-On OSC, this will have to be run for each session before running these scripts.
+This will have to be run for each session before running these scripts.
 
 Most scripts also require pydcd, which provides DCD file reading and writing
 fuctionality. pydcd can be installed on the following systems with:
@@ -28,27 +28,27 @@ generate_random.py
 metadata.py
   Prints metadata/properties of each DCD file passed.
 
-template_combined.py
+2_time_std.py
   Calculates overlap, scattering functions, and mean squared displacement
   over set of interval lengths for given trajectory, averaging over initial
   times. Frames are assumed to be evenly spaced.
 
-template_combined_aging.py
+2_time_aging.py
   Same as template_combined.py, but for first region of custom equilibriation
   trajectories. In this region, the frames are not evenly spaced, instead
   roughly following a geometric progression.
 
-template_combined_geom.py
+2_time_geom.py
   Same as template_combined.py, but for second region of custom equilibriation
   trajectories. In this region, the frames are not evenly spaced, instead
   following a repeating uneven progression.
 
-template_combined_variance.py
+naive_chi4.py
   Calculates the variance of overlap and scattering functions between multiple
   equal-length trajectories. These quantities are equivalent to various
   definitions of naive chi_4.
 
-template_variable_ta2.py
+s4_ta.py
   Calculates S4 from multiple runs. This script calculates S4 for a
   progression of values of t_a, which represents the lag between intervals
   (((t_1 + t_2) - (t_3 + t_4)) / 2). If specified via options, output may be
@@ -59,7 +59,7 @@ template_variable_ta2.py
   a range of magnitudes. This script may use large amounts of memory if
   trajectory files have many particles and many q values are used.
 
-template_variable_ta_fft.py
+s4_ta_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a linear
   sequence of values of t_a, which represents the lag between intervals
   (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses both time and spatial
@@ -68,7 +68,7 @@ template_variable_ta_fft.py
   Binning by q magnitudes may be enabled in the same way as in
   template_variable_ta2.py.
 
-template_variable_tb.py
+s4_tb.py
   Calculates S4 from multiple runs. This script calculates S4 for a
   progression of values of t_b, which represents the average interval
   length (((t_2 - t_1) + (t_4 - t_3)) / 2). If specified via options, output
@@ -79,7 +79,7 @@ template_variable_tb.py
   with a range of magnitudes. This script may use large amounts of memory if
   trajectory files have many particles and many q values are used.
 
-template_variable_tb_sfft_qshell.py
+s4_tb_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a
   progression of values of t_b, which represents the average interval
   length (((t_2 - t_1) + (t_4 - t_3)) / 2). This script uses both spatial
