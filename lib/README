@@ -1,0 +1,36 @@
+This directory contains a number of modules containing shared functionality
+used by trajectory analysis scripts. Each module has a corresponding class
+that is instantiated by the script that stores state corresponding to its
+functionality and has a set of script options that it can process from the
+command line.
+
+The modules present are:
+
+opentraj.py
+  Module used for opening sets of trajectory files and runs with trajectory
+  files. Consistency checks of the files are run and trajectory properties
+  are compiled for later used.
+
+progression.py
+  Module used for generating sequences of numbers, usually used for
+  sets of progressively increasing interval lengths of different types.
+
+frame.py
+  Module for getting particle position data from a set of frames in
+  trajectory files. This module depends on one or multiple underlying
+  trajectory file set objects provided by the opentraj module to read data
+  from.
+
+wcalc.py
+  Module for calculating the w functions found in correlators from a set of
+  particle position data. This module depends upon an underlying object
+  provided by the frame module.
+
+qshell.py
+  Module for sorting and binning sets of quantities associated with an
+  omnidirectional three-dimensional array of q vectors into quantities
+  averaged by q vector magnitude. Two different regions of q vector magnitudes
+  may be specified, one with averaging according to smaller discrete q vector
+  magnitudes and another with averaging according to ranges of larger q vector
+  magnitudes in onion shells. This module works particularly well for sorting
+  the output of a three-dimensional fast Fourier transform.
