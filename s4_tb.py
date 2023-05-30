@@ -339,8 +339,9 @@ for index, tb in enumerate(tbvals):
               tbval_total_s4[1][size_ft-1-k,size_ft-1-l,m] = even_s4i - oddx_s4i - oddy_s4i
 
       # Use x2, y2, z2 arrays for calculation of total part if
-      # different start points for intervals. Otherwise, calculate
-      # square of complex norm of existing components
+      # intervals have different start points different start points
+      # for intervals. Otherwise, reuse edges calculated with
+      # x0, y0, z0
       if ta - tc != 0:
         # Generate edges for 3-dimensional Fourier transform for end
         # term of total part of S4
@@ -352,6 +353,10 @@ for index, tb in enumerate(tbvals):
           ft_z_edge[0][k] = np.cos(q * -z2)
           ft_z_edge[1][k] = np.sin(q * -z2)
 
+      # If different first and second intervals, multiply total S4 by
+      # component for second interval. Otherwise, calculate square of
+      # complex norm of existing components.
+      if ta != 0 or tc != 0:
         # Mutliply total part of S4 by start term using edge arrays.
         # Calculate only real part, as only the real part of the result
         # is used
@@ -360,10 +365,10 @@ for index, tb in enumerate(tbvals):
             for m in range(0, size_ft):
               # Calculate real components of S4 that are even and odd
               # with regard to signs of different components of q
-              even_s4r = np.sum(w[0] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
-              even_s4r -= np.sum(w[0] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
-              oddx_s4r = -np.sum(w[0] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
-              oddy_s4r = -np.sum(w[0] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
+              even_s4r = np.sum(w[1] * ft_x_edge[0][k] * ft_y_edge[0][l] * ft_z_edge[0][m])
+              even_s4r -= np.sum(w[1] * ft_x_edge[1][k] * ft_y_edge[1][l] * ft_z_edge[0][m])
+              oddx_s4r = -np.sum(w[1] * ft_x_edge[1][k] * ft_y_edge[0][l] * ft_z_edge[1][m])
+              oddy_s4r = -np.sum(w[1] * ft_x_edge[0][k] * ft_y_edge[1][l] * ft_z_edge[1][m])
 
               # Complete and multiply 4 corresponding values of S4 by
               # combining computed values
