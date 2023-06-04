@@ -2,16 +2,6 @@ import numpy as np
 import sys
 import pydcd
 
-def usage():
-  """
-  Print help documentation for options processed by the frame module.
-  """
-  print("-s Frame number to start on (index starts at 1)",
-        "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
-        "-o Start index (from 1) of particles to limit analysis to",
-        "-p End index (from 1) of particles to limit analysis to",
-        sep="\n", file=sys.stderr)
-
 class frames():
   """
   Class for reading particle data from trajectory file arrays.
@@ -29,16 +19,27 @@ class frames():
     start: int - 0-indexed index of first frame to use for analysis
     final: int - 1 greater than 0-indexed index of last frame to use
       for analysis
+    n_atoms: int - Number of atoms in each molecule for polyatomic
+      trajectories, None if trajectory not polyatomic
+    atom_masses: np.array(dtype=float) - Array of proportional masses
+      of each atom in each molecule, normalized before calculation to
+      sum to 1
     n_frames: int - Number of frames included in analysis
     shortopts: str - List of short options processed by this module,
       used by gnu_getopt()
+    longopts: str - List of long options processed by this module, used
+      by gnu_getopt()
   """
   limit_particles = False
   upper_limit = None
   lower_limit = None
   start = 0
   final = None
+  n_atoms = None
+  atom_masses = None
+
   shortopts = "s:m:o:p:"
+  longopts = ["polyatomic=", "polyatomic-masses="]
 
   def __init__(self, trajset):
     """
@@ -87,20 +88,39 @@ class frames():
       self.dcdfiles = self.trajset.dcdfiles
       self.fileframes = self.trajset.fileframes
 
-    if self.limit_particles == False:
-      self.particles = self.fparticles
-    else:
-      if self.lower_limit == None:
-        self.lower_limit = 0
-      if self.upper_limit == None:
-        self.upper_limit = self.fparticles
+    self.particles = self.fparticles
 
-      if self.lower_limit != 0 or self.upper_limit < self.fparticles:
-        self.particles = self.upper_limit - self.lower_limit
-        self.limit_particles = True
-      else:
-        self.particles = self.fparticles
-        self.limit_particles = False
+    if self.n_atoms != None:
+      if self.n_atoms < 2:
+        raise RuntimeError("Polyatomic trajectories must have 2 or more atoms per molecule")
+
+      if self.particles % self.n_atoms != 0:
+        raise RuntimeError("Polyatomic trajectories must have number of particles divisible by number of particles in each molecule")
+      self.particles //= self.n_atoms
+
+    if self.atom_masses is not None:
+      if self.n_atoms == None:
+        raise RuntimeError("Specified atom masses without specifying polyatomic mode")
+
+      if len(self.atom_masses) != self.n_atoms:
+        raise RuntimeError("Number of specified atom masses different from number of atoms per molecule")
+
+      # Normalize atom masses to sum to 1 for efficiency of later
+      # calculations
+      self.atom_masses /= np.sum(self.atom_masses)
+
+    if self.lower_limit == None:
+      self.lower_limit = 0
+    elif self.lower_limit != 0:
+      self.limit_particles = True
+
+    if self.upper_limit == None:
+      self.upper_limit = self.fparticles
+    elif self.upper_limit < self.particles:
+      self.limit_particles = True
+
+    if self.limit_particles == True:
+      self.particles = self.upper_limit - self.lower_limit
 
     # End of set of frames to used for both final and initial times
     if self.final == None:
@@ -111,9 +131,9 @@ class frames():
 
     self.n_frames = self.final - self.start
 
-    # If particle limiting required, allocate intermediate arrays for
-    # particle reading
-    if self.limit_particles == True:
+    # If particle limiting required or polyatomic molecules used,
+    # allocate intermediate arrays for particle reading
+    if self.limit_particles == True or self.n_atoms != None:
       self.x = np.empty(self.fparticles, dtype=np.single)
       self.y = np.empty(self.fparticles, dtype=np.single)
       self.z = np.empty(self.fparticles, dtype=np.single)
@@ -141,7 +161,7 @@ class frames():
     must be performed before later data reading functions.
     """
 
-    if self.limit_particles == False:
+    if self.limit_particles == False and self.n_atoms == None:
       # Allocate intermediate particle reading arrays
       x0 = np.empty(self.particles, dtype=np.single)
       y0 = np.empty(self.particles, dtype=np.single)
@@ -153,7 +173,20 @@ class frames():
     for i in range(0, self.n_runs):
       for j in range(0, self.n_frames):
         which_file, offset = self.lookup_frame(j)
-        if self.limit_particles == True:
+        if self.n_atoms != None:
+          self.dcdfiles[i][which_file].gdcdp(self.x, self.y, self.z, offset)
+          x = self.x.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+          y = self.y.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+          z = self.z.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+          if self.atom_masses is None:
+            self.cm[i][j][0] = np.mean(x)
+            self.cm[i][j][1] = np.mean(y)
+            self.cm[i][j][2] = np.mean(z)
+          else:
+            self.cm[i][j][0] = np.sum(self.atom_masses * np.mean(x, axis=0))
+            self.cm[i][j][1] = np.sum(self.atom_masses * np.mean(y, axis=0))
+            self.cm[i][j][2] = np.sum(self.atom_masses * np.mean(z, axis=0))
+        elif self.limit_particles == True:
           self.dcdfiles[i][which_file].gdcdp(self.x, self.y, self.z, offset)
           self.cm[i][j][0] = np.mean(self.x[self.lower_limit:self.upper_limit])
           self.cm[i][j][1] = np.mean(self.y[self.lower_limit:self.upper_limit])
@@ -178,7 +211,20 @@ class frames():
       run: int - Number of run to read from
     """
     which_file, offset = self.lookup_frame(t0)
-    if self.limit_particles == True:
+    if self.n_atoms != None:
+      self.dcdfiles[run][which_file].gdcdp(self.x, self.y, self.z, offset)
+      x = self.x.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+      y = self.y.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+      z = self.z.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+      if self.atom_masses is None:
+        x0[:] = np.mean(x, axis=1)
+        y0[:] = np.mean(y, axis=1)
+        z0[:] = np.mean(z, axis=1)
+      else:
+        x0[:] = np.sum(self.atom_masses * x, axis=1)
+        y0[:] = np.sum(self.atom_masses * y, axis=1)
+        z0[:] = np.sum(self.atom_masses * z, axis=1)
+    elif self.limit_particles == True:
       self.dcdfiles[run][which_file].gdcdp(self.x, self.y, self.z, offset)
       x0[:] = self.x[self.lower_limit:self.upper_limit]
       y0[:] = self.y[self.lower_limit:self.upper_limit]
@@ -190,6 +236,43 @@ class frames():
     x0 -= self.cm[run][t0][0]
     y0 -= self.cm[run][t0][1]
     z0 -= self.cm[run][t0][2]
+
+  def get_orientations(self, t0, x0, y0, z0, run):
+    """
+    Read values for molecule orientations for a given frame and run
+    from DCD file into given set of arrays. Direction coordinates are
+    normalized to unit vectors.
+
+    Arguments:
+      t0: int - Frame number within run to read from
+      x0, y0, z0: np.array(dtype=np.single) - Arrays for x, y, and z
+        components of orientation vectors to be filled. The size of the
+        arrays must be the number of particles in the files.
+      run: int - Number of run to read from
+    """
+    if self.n_atoms == None:
+      raise RuntimeError("Orientations cannot be found for non-polyatomic trajectories")
+
+    # Get differences between particle positions in each molecule.
+    # In this implementation, just the relative position of the first
+    # and second molecules are used to calculate the orientation. In
+    # the future, the positions of the other atoms may be used to find
+    # a more accurate orientation. For now, this approach is used,
+    # which avoids the creation of 0-length orientation vectors.
+    which_file, offset = self.lookup_frame(t0)
+    self.dcdfiles[run][which_file].gdcdp(self.x, self.y, self.z, offset)
+    x = self.x.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+    y = self.y.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+    z = self.z.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
+    x0[:] = x[:,1] - x[:,0]
+    y0[:] = y[:,1] - y[:,0]
+    z0[:] = z[:,1] - z[:,0]
+
+    # Normalize vectors by length, converting to unit vectors
+    hyp = np.linalg.norm((x0, y0, z0), axis=0)
+    x0 /= hyp
+    y0 /= hyp
+    z0 /= hyp
 
   def frame_time(self, t0):
     """
@@ -234,6 +317,10 @@ class frames():
       self.lower_limit = int(a) - 1
     elif o == "-p":
       self.upper_limit = int(a)
+    elif o == "--polyatomic":
+      self.n_atoms = int(a)
+    elif o == "--polyatomic-masses":
+      self.atom_masses = np.array(list(map(float, a.split(","))))
     else:
       # Option not matched
       return False
@@ -248,4 +335,6 @@ class frames():
           "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
           "-o Start index (from 1) of particles to limit analysis to",
           "-p End index (from 1) of particles to limit analysis to",
+          "--polyatomic Trajectory file contains sets of atom coordinates from molecules, argument is number of atoms",
+          "--polyatomic-masses Proportional mass of each atom in each molecule, argument is comma-separated list (default: equal masses)",
           sep="\n", file=sys.stderr)
