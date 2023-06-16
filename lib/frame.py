@@ -335,6 +335,6 @@ class frames():
           "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
           "-o Start index (from 1) of particles to limit analysis to",
           "-p End index (from 1) of particles to limit analysis to",
-          "--polyatomic Trajectory file contains sets of atom coordinates from molecules, argument is number of atoms",
+          "--polyatomic Trajectory file contains sets of atom coordinates from molecules, argument is number of atoms in molecule",
           "--polyatomic-masses Proportional mass of each atom in each molecule, argument is comma-separated list (default: equal masses)",
           sep="\n", file=sys.stderr)
