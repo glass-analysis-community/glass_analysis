@@ -174,7 +174,7 @@ x2 = np.empty(frames.particles, dtype=np.single)
 y2 = np.empty(frames.particles, dtype=np.single)
 z2 = np.empty(frames.particles, dtype=np.single)
 
-# Bins for total calculation.
+# Bins for particle positions and computing spatial FFT
 a_bins = np.zeros((size_fft, size_fft, size_fft), dtype=np.float64)
 b_bins = np.zeros((size_fft, size_fft, size_fft), dtype=np.float64)
 self_bins = np.empty((size_fft, size_fft, size_fft), dtype=np.float64)
@@ -231,7 +231,7 @@ for index, ta in enumerate(lags):
   norm = 0
 
   # Iterate over runs (FFT will be averaged over runs)
-  for i in np.arange(0, runset.n_runs):
+  for i in range(0, runset.n_runs):
     # Clear run accumulators
     run_self_s4[:, :, :] = 0.0
     run_total_s4[:, :, :] = 0.0
@@ -347,21 +347,22 @@ for index, ta in enumerate(lags):
     # 7 - S4 total component standard deviation
     # 8 - S4 self component standard deviation
     # 9 - S4 distinct component standard deviation
-    # 10 - number of frame sets in each run contributing to
-    #      average of quantities
+    # 10 - number of frame sets in each run contributing to average of
+    #      quantities
     # 11 - frame difference corresponding to t_a
     for i in range(0, discrete_s4.shape[-1]):
-      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
-                                                           qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
-                                                           qshell.qnorm_discrete_sorted[i],
-                                                           discrete_s4[stypes.total.value][i],
-                                                           discrete_s4[stypes.self.value][i],
-                                                           discrete_s4[stypes.distinct.value][i],
-                                                           discrete_s4[stypes.totalstd.value][i],
-                                                           discrete_s4[stypes.selfstd.value][i],
-                                                           discrete_s4[stypes.distinctstd.value][i],
-                                                           norm,
-                                                           ta))
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
+                    %(time_ta,
+                      qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
+                      qshell.qnorm_discrete_sorted[i],
+                      discrete_s4[stypes.total.value][i],
+                      discrete_s4[stypes.self.value][i],
+                      discrete_s4[stypes.distinct.value][i],
+                      discrete_s4[stypes.totalstd.value][i],
+                      discrete_s4[stypes.selfstd.value][i],
+                      discrete_s4[stypes.distinctstd.value][i],
+                      norm,
+                      ta))
 
     # Print output columns for second region q magnitude onion shells:
     # 1 - t_a
@@ -377,17 +378,18 @@ for index, ta in enumerate(lags):
     #      average of quantities
     # 11 - frame difference corresponding to t_a
     for i in range(0, shell_s4.shape[-1]):
-      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_ta,
-                                                           (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
-                                                           qshell.qnorm_shells[i],
-                                                           shell_s4[stypes.total.value][i],
-                                                           shell_s4[stypes.self.value][i],
-                                                           shell_s4[stypes.distinct.value][i],
-                                                           shell_s4[stypes.totalstd.value][i],
-                                                           shell_s4[stypes.selfstd.value][i],
-                                                           shell_s4[stypes.distinctstd.value][i],
-                                                           norm,
-                                                           ta))
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
+                    %(time_ta,
+                      (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
+                      qshell.qnorm_shells[i],
+                      shell_s4[stypes.total.value][i],
+                      shell_s4[stypes.self.value][i],
+                      shell_s4[stypes.distinct.value][i],
+                      shell_s4[stypes.totalstd.value][i],
+                      shell_s4[stypes.selfstd.value][i],
+                      shell_s4[stypes.distinctstd.value][i],
+                      norm,
+                      ta))
 
   # If q vector shells not used, print all elements
   else:
@@ -408,18 +410,19 @@ for index, ta in enumerate(lags):
           # 11 - number of frame sets in each run contributing to
           #      average of quantities
           # 12 - frame difference corresponding to t_a
-          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n" %(time_ta,
-                                                                  (i-size_fft//2)*2*math.pi/box_size,
-                                                                  (j-size_fft//2)*2*math.pi/box_size,
-                                                                  k*2*math.pi/box_size,
-                                                                  s4[stypes.total.value][i][j][k],
-                                                                  s4[stypes.self.value][i][j][k],
-                                                                  s4[stypes.distinct.value][i][j][k],
-                                                                  s4[stypes.totalstd.value][i][j][k],
-                                                                  s4[stypes.selfstd.value][i][j][k],
-                                                                  s4[stypes.distinctstd.value][i][j][k],
-                                                                  norm,
-                                                                  ta))
+          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n"
+                        %(time_ta,
+                          (i-size_fft//2)*2*math.pi/box_size,
+                          (j-size_fft//2)*2*math.pi/box_size,
+                          k*2*math.pi/box_size,
+                          s4[stypes.total.value][i][j][k],
+                          s4[stypes.self.value][i][j][k],
+                          s4[stypes.distinct.value][i][j][k],
+                          s4[stypes.totalstd.value][i][j][k],
+                          s4[stypes.selfstd.value][i][j][k],
+                          s4[stypes.distinctstd.value][i][j][k],
+                          norm,
+                          ta))
 
   # If output files for each lag used, close file for this lag
   if dumpfiles == True:

@@ -209,11 +209,12 @@ for i in range(0, lags.size):
   # 6 - variance of directional average of scattering function
   # 7 - number of frame pairs with interval
   # 8 - frame difference corresponding to interval time
-  print("%f %f %f %f %f %f %d %d" %(time,
-                                    var_overlap[i],
-                                    var_fc[i][0],
-                                    var_fc[i][1],
-                                    var_fc[i][2],
-                                    var_fc[i][3],
-                                    norm[i],
-                                    lags[i]))
+  print("%f %f %f %f %f %f %d %d"
+        %(time,
+          var_overlap[i],
+          var_fc[i][0],
+          var_fc[i][1],
+          var_fc[i][2],
+          var_fc[i][3],
+          norm[i],
+          lags[i]))

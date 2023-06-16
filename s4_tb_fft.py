@@ -256,7 +256,7 @@ for index, tb in enumerate(tbvals):
   norm = 0
 
   # Iterate over runs (FFT will be averaged over runs)
-  for i in np.arange(0, runset.n_runs):
+  for i in range(0, runset.n_runs):
     # Clear run accumulators
     run_self_s4[:, :, :] = 0.0
     run_total_s4[:, :, :] = 0.0
@@ -411,17 +411,18 @@ for index, tb in enumerate(tbvals):
     #      average of quantities
     # 11 - frame difference corresponding to t_b
     for i in range(0, discrete_s4.shape[-1]):
-      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_tb,
-                                                           qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
-                                                           qshell.qnorm_discrete_sorted[i],
-                                                           discrete_s4[stypes.total.value][i],
-                                                           discrete_s4[stypes.self.value][i],
-                                                           discrete_s4[stypes.distinct.value][i],
-                                                           discrete_s4[stypes.totalstd.value][i],
-                                                           discrete_s4[stypes.selfstd.value][i],
-                                                           discrete_s4[stypes.distinctstd.value][i],
-                                                           norm,
-                                                           tb))
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
+                    %(time_tb,
+                      qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
+                      qshell.qnorm_discrete_sorted[i],
+                      discrete_s4[stypes.total.value][i],
+                      discrete_s4[stypes.self.value][i],
+                      discrete_s4[stypes.distinct.value][i],
+                      discrete_s4[stypes.totalstd.value][i],
+                      discrete_s4[stypes.selfstd.value][i],
+                      discrete_s4[stypes.distinctstd.value][i],
+                      norm,
+                      tb))
 
     # Print output columns for second region q magnitude onion shells:
     # 1 - t_b
@@ -437,17 +438,18 @@ for index, tb in enumerate(tbvals):
     #      average of quantities
     # 11 - frame difference corresponding to t_b
     for i in range(0, shell_s4.shape[-1]):
-      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n" %(time_tb,
-                                                           (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
-                                                           qshell.qnorm_shells[i],
-                                                           shell_s4[stypes.total.value][i],
-                                                           shell_s4[stypes.self.value][i],
-                                                           shell_s4[stypes.distinct.value][i],
-                                                           shell_s4[stypes.totalstd.value][i],
-                                                           shell_s4[stypes.selfstd.value][i],
-                                                           shell_s4[stypes.distinctstd.value][i],
-                                                           norm,
-                                                           tb))
+      outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
+                    %(time_tb,
+                      (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
+                      qshell.qnorm_shells[i],
+                      shell_s4[stypes.total.value][i],
+                      shell_s4[stypes.self.value][i],
+                      shell_s4[stypes.distinct.value][i],
+                      shell_s4[stypes.totalstd.value][i],
+                      shell_s4[stypes.selfstd.value][i],
+                      shell_s4[stypes.distinctstd.value][i],
+                      norm,
+                      tb))
 
   # If q vector shells not used, print all elements
   else:
@@ -468,18 +470,19 @@ for index, tb in enumerate(tbvals):
           # 11 - number of frame sets in each run contributing to
           #      average of quantities
           # 12 - frame difference corresponding to t_b
-          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n" %(time_tb,
-                                                                  (i-size_fft//2)*2*math.pi/box_size,
-                                                                  (j-size_fft//2)*2*math.pi/box_size,
-                                                                  k*2*math.pi/box_size,
-                                                                  s4[stypes.total.value][i][j][k],
-                                                                  s4[stypes.self.value][i][j][k],
-                                                                  s4[stypes.distinct.value][i][j][k],
-                                                                  s4[stypes.totalstd.value][i][j][k],
-                                                                  s4[stypes.selfstd.value][i][j][k],
-                                                                  s4[stypes.distinctstd.value][i][j][k],
-                                                                  norm,
-                                                                  tb))
+          outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n"
+                        %(time_tb,
+                          (i-size_fft//2)*2*math.pi/box_size,
+                          (j-size_fft//2)*2*math.pi/box_size,
+                          k*2*math.pi/box_size,
+                          s4[stypes.total.value][i][j][k],
+                          s4[stypes.self.value][i][j][k],
+                          s4[stypes.distinct.value][i][j][k],
+                          s4[stypes.totalstd.value][i][j][k],
+                          s4[stypes.selfstd.value][i][j][k],
+                          s4[stypes.distinctstd.value][i][j][k],
+                          norm,
+                          tb))
 
   # If output files for each t_b value used, close file for this t_b
   # value
