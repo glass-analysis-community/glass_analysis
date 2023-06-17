@@ -168,10 +168,6 @@ if runset.rundirs == True:
   if frames.n_atoms != None:
     std_ocorr = np.empty((3, legendre), dtype=np.float64)
 
-# Find center of mass of each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm()
-
 # Iterate over initial frames, which serve as starting points for
 # functions
 for i in initial:

@@ -123,10 +123,6 @@ var_overlap = np.zeros(lags.size, dtype=np.float64)
 # Normalization factor for scattering indices
 norm = np.zeros(lags.size, dtype=np.int64)
 
-# Find center of mass of each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm()
-
 # Accumulates values of scattering function across runs
 fc_accum = np.empty(4, dtype=np.float64)
 

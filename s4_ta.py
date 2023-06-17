@@ -218,10 +218,6 @@ print("#t_c = %d" %tc)
 # Print information about w function calculation
 wcalc.print_info()
 
-# Find center of mass for each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm()
-
 # S4 calcuation
 
 print("Entering S4 calculation", file=sys.stderr)

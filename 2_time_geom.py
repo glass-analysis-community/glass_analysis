@@ -101,9 +101,6 @@ if runset.rundirs == True:
 else:
   trajset.opentraj(m_start, False)
 
-# Prepare frames object for calculation
-frames.prepare()
-
 # Print basic properties shared across the files
 print("#nset: %d" %frames.fileframes[-1])
 print("#N: %d" %frames.fparticles)
@@ -157,6 +154,9 @@ shift_index = np.argmin(lag_cycle)
 frames.shift_start(shift_index)
 lag_cycle = np.roll(lag_cycle, -shift_index)
 lag_cycle_sum = np.insert(np.cumsum(lag_cycle), 0, 0)
+
+# Prepare frames object for calculation
+frames.prepare()
 
 # Largest possible positive and negative lags
 prog.max_val = lag_sum * ((frames.n_frames - 1) // set_len) + lag_cycle_sum[(frames.n_frames - 1) % set_len]
@@ -237,10 +237,6 @@ if runset.rundirs == True:
 
 # Normalization factor for scattering indices
 norm = np.zeros(lags.size, dtype=np.int64)
-
-# Find center of mass of each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm()
 
 # Iterate over runs
 for i in range(0, runset.n_runs):

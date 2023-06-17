@@ -196,10 +196,6 @@ if runset.rundirs == True:
 # Normalization factor for scattering indices
 norm = np.zeros(lags.size, dtype=np.int64)
 
-# Find center of mass of each frame
-print("Finding centers of mass for frames", file=sys.stderr)
-frames.generate_cm()
-
 # Iterate over runs
 for i in range(0, runset.n_runs):
   # Clear individual-run accumulators

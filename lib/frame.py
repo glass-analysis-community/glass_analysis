@@ -138,6 +138,13 @@ class frames():
       self.y = np.empty(self.fparticles, dtype=np.single)
       self.z = np.empty(self.fparticles, dtype=np.single)
 
+    # Array for center of mass of each frame
+    self.cm = np.empty((self.n_runs, self.n_frames, 3), dtype=np.float64)
+
+    # Bitmap of values indicating whether the center of mass for a
+    # given frame has been calculated and stored in self.cm
+    self.cm_def = np.zeros((self.n_runs, (self.n_frames + 7) // 8), dtype=np.uint8)
+
     # Arrays of particles on which analysis takes place are
     # not allocated here, instead being passed to functions, so that
     # the user may make decisions about their allocation and re-use.
@@ -154,48 +161,6 @@ class frames():
     offset = self.start + t - self.fileframes[which_file]
 
     return which_file, offset
-
-  def generate_cm(self):
-    """
-    Generate internal array of centers of mass for each frame. This
-    must be performed before later data reading functions.
-    """
-
-    if self.limit_particles == False and self.n_atoms == None:
-      # Allocate intermediate particle reading arrays
-      x0 = np.empty(self.particles, dtype=np.single)
-      y0 = np.empty(self.particles, dtype=np.single)
-      z0 = np.empty(self.particles, dtype=np.single)
-
-    # Allocate array for center of mass of each frame
-    self.cm = [np.empty((self.n_frames, 3), dtype=np.float64)] * self.n_runs
-
-    for i in range(0, self.n_runs):
-      for j in range(0, self.n_frames):
-        which_file, offset = self.lookup_frame(j)
-        if self.n_atoms != None:
-          self.dcdfiles[i][which_file].gdcdp(self.x, self.y, self.z, offset)
-          x = self.x.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
-          y = self.y.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
-          z = self.z.reshape((self.fparticles//self.n_atoms, self.n_atoms))[self.lower_limit:self.upper_limit,:]
-          if self.atom_masses is None:
-            self.cm[i][j][0] = np.mean(x)
-            self.cm[i][j][1] = np.mean(y)
-            self.cm[i][j][2] = np.mean(z)
-          else:
-            self.cm[i][j][0] = np.sum(self.atom_masses * np.mean(x, axis=0))
-            self.cm[i][j][1] = np.sum(self.atom_masses * np.mean(y, axis=0))
-            self.cm[i][j][2] = np.sum(self.atom_masses * np.mean(z, axis=0))
-        elif self.limit_particles == True:
-          self.dcdfiles[i][which_file].gdcdp(self.x, self.y, self.z, offset)
-          self.cm[i][j][0] = np.mean(self.x[self.lower_limit:self.upper_limit])
-          self.cm[i][j][1] = np.mean(self.y[self.lower_limit:self.upper_limit])
-          self.cm[i][j][2] = np.mean(self.z[self.lower_limit:self.upper_limit])
-        else:
-          self.dcdfiles[i][which_file].gdcdp(x0, y0, z0, offset)
-          self.cm[i][j][0] = np.mean(x0)
-          self.cm[i][j][1] = np.mean(y0)
-          self.cm[i][j][2] = np.mean(z0)
 
   def get_frame(self, t0, x0, y0, z0, run):
     """
@@ -231,6 +196,16 @@ class frames():
       z0[:] = self.z[self.lower_limit:self.upper_limit]
     else:
       self.dcdfiles[run][which_file].gdcdp(x0, y0, z0, offset)
+
+    # If center of mass has not been calculated for given frame,
+    # calculate frame center of mass
+    if (self.cm_def[run][t0 // 8] >> (t0 % 8)) & 0x1 == 0:
+      self.cm[run][t0][0] = np.mean(x0)
+      self.cm[run][t0][1] = np.mean(y0)
+      self.cm[run][t0][2] = np.mean(z0)
+
+      # Set bit corresponding to frame to 1
+      self.cm_def[run][t0 // 8] |= 0x1 << (t0 % 8)
 
     # Correct for center of mass
     x0 -= self.cm[run][t0][0]
@@ -288,14 +263,13 @@ class frames():
 
   def shift_start(self, shift_index):
     """
-    Shift the start of the frame set by a given amount
+    Shift the start of the frame set by a given amount. Should be
+    called before prepare().
 
     Arguments:
       shift_index: int - Number of frames to shift by
     """
-
     self.start += shift_index
-    self.n_frames -= shift_index
 
   def catch_opt(self, o, a):
     """
