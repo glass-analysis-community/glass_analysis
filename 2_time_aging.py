@@ -119,9 +119,9 @@ if frames.n_atoms != None:
     thetab = 0.9
 
 # Stores coordinates of all particles in initial frames
-x0 = [np.empty(frames.particles, dtype=np.single)] * runset.n_runs
-y0 = [np.empty(frames.particles, dtype=np.single)] * runset.n_runs
-z0 = [np.empty(frames.particles, dtype=np.single)] * runset.n_runs
+x0 = np.empty((runset.n_runs, frames.particles), dtype=np.single)
+y0 = np.empty((runset.n_runs, frames.particles), dtype=np.single)
+z0 = np.empty((runset.n_runs, frames.particles), dtype=np.single)
 
 # Stores coordinates of all particles in end frames
 x1 = np.empty(frames.particles, dtype=np.single)
