@@ -259,8 +259,7 @@ def construct_fill_matrices(b, threshold, kerndelta, kernvals):
   if np.any(np.array(bshape) < 5):
     raise RuntimeError("FFT matrix not large enough for filling zero-denominator values")
 
-  # Mask with set of X4 values less than first quantum of X4 for full
-  # means
+  # Mask with set of X4 values less than first quantum of X4
   zeromask = b < threshold
   nonzeromask = np.logical_not(zeromask)
   zerovals = np.argwhere(zeromask)
@@ -276,28 +275,42 @@ def construct_fill_matrices(b, threshold, kerndelta, kernvals):
   # Self coefficient is always 5/6
   mat.setdiag(5/6)
 
-  # Iterate over unknown values
-  for i, origin in enumerate(zerovals):
-    # Iterate over values in kernel
-    for delta, val in zip(kerndelta, kernvals):
-      # Number of unknown value if value at coord is unknown, otherwise
-      # has value of -1
-      num = zeronums[tuple((origin + delta) % bshape)]
+  # Create new matrix for constructing constant vector. Values in FFT
+  # matrix are flattened over last dimension to make vector dot product
+  # work correctly
+  constmat = sparse.lil_matrix((zerovals.shape[0], np.prod(bshape)), dtype=np.float64)
 
-      if num != -1:
-        # If an unknown value and creating a new coefficient matrix,
-        # add to coefficient
-        mat[i, num] -= val
+  if zerovals.shape[0] > 0:
+    # Iterate over unknown values
+    for i, origin in enumerate(zerovals):
+      # Iterate over values in kernel
+      for delta, val in zip(kerndelta, kernvals):
+        # Coordinate of corresponding value
+        coord = tuple((origin + delta) % bshape)
 
-  # Convert coefficient matrix to CSR format for solution routine
-  mat = mat.tocsr()
+        # Number of unknown value if value at coord is unknown,
+        # otherwise has value of -1
+        num = zeronums[coord]
 
-  return nonzeromask, zerovals, zeronums, mat
+        if num == -1:
+          # If a known value, add to constants. Calculate position in
+          # C-order flattened array to insert
+          constmat[i, coord[0] * bshape[1]*bshape[2] + coord[1] * bshape[2] + coord[2]] += val
+        else:
+          # If an unknown value and creating a new coefficient matrix,
+          # add to coefficient
+          mat[i, num] -= val
 
-def div_fill(a, b, nonzeromask, zerovals, zeronums, mat):
-  if b.shape[2] < 5:
-    raise RuntimeError("FFT matrix not large enough for filling zero-denominator values")
+    # Convert coefficient matrix to CSR format for solution routine
+    mat = mat.tocsr()
 
+    # Convert constant-generation matrix to CSR format for efficient
+    # vector product calculation
+    constmat = constmat.tocsr()
+
+  return nonzeromask, zerovals, mat, constmat
+
+def div_fill(a, b, nonzeromask, zerovals, mat, constmat):
   # Computed output values
   f = np.empty(b.shape, dtype=np.float64)
 
@@ -305,27 +318,11 @@ def div_fill(a, b, nonzeromask, zerovals, zeronums, mat):
   # divisors
   f[nonzeromask] = a[nonzeromask] / b[nonzeromask]
 
-  # Vector of constants for linear system of unknown values
-  const = np.zeros(zerovals.shape[0], dtype=np.float64)
-
-  # Iterate over unknown values
-  for i, origin in enumerate(zerovals):
-    # Iterate over values in kernel
-    for delta, val in zip(kerndelta, kernvals):
-      # Coordinate of corresponding value
-      coord = tuple((origin + delta) % f.shape)
-
-      # Number of unknown value if value at coord is unknown, otherwise
-      # has value of -1
-      num = zeronums[coord]
-
-      if num == -1:
-        # If a known value, add to constants
-        const[i] += val * f[coord]
-
-  # Solve linear system and assign solution to unknown values in
-  # computed matrix
-  f[tuple(zerovals.transpose())] = sparse.linalg.spsolve(mat, const)
+  if zerovals.shape[0] > 0:
+    # Multiply by constant-generating matrix and then coefficient
+    # matrix inverse to solve linear system. Assign solution to unknown
+    # values in computed matrix.
+    f[tuple(zerovals.transpose())] = sparse.linalg.spsolve(mat, constmat.dot(np.ravel(f, order="C")))
 
   return f
 
@@ -437,7 +434,7 @@ for index, ta in enumerate(lags):
 
   # Construct matrices of linear system for filling unknown values
   # for full mean
-  nonzeromask, zerovals, zeronums, mat = construct_fill_matrices(np.sum(obsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
+  nonzeromask, zerovals, mat, constmat = construct_fill_matrices(np.sum(obsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
 
   # Compute parts of estimators for full means
   est_r12 = density * ((1 + fn) * np.mean(obsv[0]) * np.mean(obsv[1]) + fn * np.mean(obsv[0] * obsv[1]))
@@ -445,14 +442,14 @@ for index, ta in enumerate(lags):
             + fn * (np.mean(obsv_s[0], axis=0) * np.mean(obsv[0] * obsv[1])
                     + np.mean(obsv[0]) * np.mean(obsv[1,:,None,None,None] * obsv_s[0], axis=0)
                     + np.mean(obsv[1]) * np.mean(obsv_s[0] * obsv[0,:,None,None,None]))
-  est_r6d4 = density * (div_fill(np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-             - fn * div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, zeronums, mat)
-             + fn * div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat))
-  est_65d4 = div_fill(np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-             - fn * (div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, zeronums, mat) \
-                     + div_fill(np.mean(obsv_s[2] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-                     - div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0) * np.mean(obsv_s[2], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat) \
-                     - div_fill(np.mean(obsv_s[1] * obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat))
+  est_r6d4 = density * (div_fill(np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+             - fn * div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
+             + fn * div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
+  est_65d4 = div_fill(np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+             - fn * (div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat) \
+                     + div_fill(np.mean(obsv_s[2] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+                     - div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0) * np.mean(obsv_s[2], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat) \
+                     - div_fill(np.mean(obsv_s[1] * obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
 
   # Calculate S4 contribution full means
   if qshell_active == True:
@@ -477,7 +474,7 @@ for index, ta in enumerate(lags):
 
     # Construct matrices of linear system for filling unknown values
     # for full mean
-    nonzeromask, zerovals, zeronums, mat = construct_fill_matrices(np.sum(mobsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
+    nonzeromask, zerovals, mat, constmat = construct_fill_matrices(np.sum(mobsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
 
     # Compute parts of estimators for jackknife mean
     est_r12 = density * ((1 + fn) * np.mean(mobsv[0]) * np.mean(mobsv[1]) + fn * np.mean(mobsv[0] * mobsv[1]))
@@ -485,14 +482,14 @@ for index, ta in enumerate(lags):
               + fn * (np.mean(mobsv_s[0], axis=0) * np.mean(mobsv[0] * mobsv[1])
                       + np.mean(mobsv[0]) * np.mean(mobsv[1,:,None,None,None] * mobsv_s[0], axis=0)
                       + np.mean(mobsv[1]) * np.mean(mobsv_s[0] * mobsv[0,:,None,None,None]))
-    est_r6d4 = density * (div_fill(np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-               - fn * div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, zeronums, mat)
-               + fn * div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat))
-    est_65d4 = div_fill(np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-               - fn * (div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, zeronums, mat) \
-                       + div_fill(np.mean(mobsv_s[2] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, zeronums, mat) \
-                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0) * np.mean(mobsv_s[2], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat) \
-                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, zeronums, mat))
+    est_r6d4 = density * (div_fill(np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+               - fn * div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
+               + fn * div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
+    est_65d4 = div_fill(np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+               - fn * (div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat) \
+                       + div_fill(np.mean(mobsv_s[2] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
+                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0) * np.mean(mobsv_s[2], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat) \
+                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
 
     # Calculate jackknife contributions
     if qshell_active == True:
