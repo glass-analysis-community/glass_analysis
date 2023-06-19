@@ -82,7 +82,7 @@ class prog():
   adj_log = False
 
   shortopts = "fg:w:"
-  longopts = ["low-interval", "high-interval", "negvals"]
+  longopts = ["low-interval=", "high-interval=", "negvals"]
 
   def sequence(self, seq_val):
     """
