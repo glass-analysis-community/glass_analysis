@@ -441,7 +441,7 @@ for index, ta in enumerate(lags):
   est_123 = (1 + 3*fn) * np.mean(obsv[0]) * np.mean(obsv[1]) * np.mean(obsv_s[0], axis=0) \
             + fn * (np.mean(obsv_s[0], axis=0) * np.mean(obsv[0] * obsv[1])
                     + np.mean(obsv[0]) * np.mean(obsv[1,:,None,None,None] * obsv_s[0], axis=0)
-                    + np.mean(obsv[1]) * np.mean(obsv_s[0] * obsv[0,:,None,None,None]))
+                    + np.mean(obsv[1]) * np.mean(obsv_s[0] * obsv[0,:,None,None,None], axis=0))
   est_r6d4 = density * (div_fill(np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
              - fn * div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
              + fn * div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
@@ -481,7 +481,7 @@ for index, ta in enumerate(lags):
     est_123 = (1 + 3*fn) * np.mean(mobsv[0]) * np.mean(mobsv[1]) * np.mean(mobsv_s[0], axis=0) \
               + fn * (np.mean(mobsv_s[0], axis=0) * np.mean(mobsv[0] * mobsv[1])
                       + np.mean(mobsv[0]) * np.mean(mobsv[1,:,None,None,None] * mobsv_s[0], axis=0)
-                      + np.mean(mobsv[1]) * np.mean(mobsv_s[0] * mobsv[0,:,None,None,None]))
+                      + np.mean(mobsv[1]) * np.mean(mobsv_s[0] * mobsv[0,:,None,None,None], axis=0))
     est_r6d4 = density * (div_fill(np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
                - fn * div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
                + fn * div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
