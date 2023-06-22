@@ -495,13 +495,13 @@ for index, ta in enumerate(lags):
     if qshell_active == True:
       run_st_discrete, run_st_shells = qshell.to_shells(fft.rfftn(est_123 - est_r12).real)
       run_cr_discrete, run_cr_shells = qshell.to_shells(fft.rfftn(est_r6d4 - est_r12).real)
-      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.rfftn(np.mean(obsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real)
-      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.rfftn(np.mean(obsv_s[4], axis=0) - est_65d4).real)
+      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.rfftn(np.mean(mobsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real)
+      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.rfftn(np.mean(mobsv_s[4], axis=0) - est_65d4).real)
     else:
       run_st = fft.rfftn(est_123 - est_r12).real
       run_cr = fft.rfftn(est_r6d4 - est_r12).real
-      run_mc = fft.rfftn(np.mean(obsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real
-      run_sp = fft.rfftn(np.mean(obsv_s[4], axis=0) - est_65d4).real
+      run_mc = fft.rfftn(np.mean(mobsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real
+      run_sp = fft.rfftn(np.mean(mobsv_s[4], axis=0) - est_65d4).real
 
     # Accumulate jackknife contributions for jackknife mean
     if qshell_active == True:
