@@ -188,9 +188,29 @@ obsv = np.empty((2, runset.n_runs), dtype=np.float64)
 # 4 - G4_s(r,t_1,t_2,t_3,t_4) - G4 self part (X7)
 obsv_s = np.empty((5, runset.n_runs, size_fft, size_fft, size_fft), dtype=np.float64)
 
-# Masked versions of observables arrays
-mobsv = obsv.view(np.ma.MaskedArray)
-mobsv_s = obsv_s.view(np.ma.MaskedArray)
+# Cross-run and jackknife means of observables and combined observables
+# not associated with a spatial vector. In first dimension:
+# 0 - C(t_1,t_2) - (X1)
+# 1 - C(t_3,t_4) - (X2)
+# 2 - C(t_1,t_2) * C(t_3,t_4) - (X1 * X2)
+mobsv = np.empty(3, dtype=np.float64)
+jmobsv = np.empty(3, dtype=np.float64)
+
+# Cross-run and jackknife means of observables and combined observables
+# that are associated with a spatial vector. In first dimension:
+# 0 - G(r,t_1,t_3) (X3)
+# 1 - G_d(r,t_1,t_3) (X4)
+# 2 - G_s(r,t_1,t_3) (X5)
+# 3 - G4_d(r,t_1,t_2,t_3,t_4) (X6)
+# 4 - G4_s(r,t_1,t_2,t_3,t_4) (X7)
+# 5 - C(t_1,t_2) * G(r,t_1,t_3) (X1 * X3)
+# 6 - C(t_3,t_4) * G(r,t_1,t_3) (X2 * X3)
+# 7 - G_d(r,t_1,t_3)^2 (X3^2)
+# 8 - G_d(r,t_1,t_3) * G_s(r,t_1,t_3) (X4 * X5)
+# 9 - G_d(r,t_1,t_3) * G4_d(r,t_1,t_2,t_3,t_4) (X4 * X6)
+# 10 - G_s(r,t_1,t_3) * G4_d(r,t_1,t_2,t_3,t_4) (X5 * X6)
+mobsv_s = np.empty((11, size_fft, size_fft, size_fft), dtype=np.float64)
+jmobsv_s = np.empty((11, size_fft, size_fft, size_fft), dtype=np.float64)
 
 # Holds 4 components of S4 calcuated with unbiased estimators. In first
 # dimension:
@@ -429,79 +449,111 @@ for index, ta in enumerate(lags):
   obsv /= norm
   obsv_s /= (norm * frames.particles)
 
+  # Compute means of observables for full means
+  mobsv[0] = np.mean(obsv[0])
+  mobsv[1] = np.mean(obsv[1])
+  mobsv[2] = np.mean(obsv[0] * obsv[1])
+  mobsv_s[0] = np.mean(obsv_s[0], axis=0)
+  mobsv_s[1] = np.mean(obsv_s[1], axis=0)
+  mobsv_s[2] = np.mean(obsv_s[2], axis=0)
+  mobsv_s[3] = np.mean(obsv_s[3], axis=0)
+  mobsv_s[4] = np.mean(obsv_s[4], axis=0)
+  mobsv_s[5] = np.mean(obsv[0,:,None,None,None] * obsv_s[0], axis=0)
+  mobsv_s[6] = np.mean(obsv[1,:,None,None,None] * obsv_s[0], axis=0)
+  mobsv_s[7] = np.mean(obsv_s[1]**2, axis=0)
+  mobsv_s[8] = np.mean(obsv_s[1] * obsv_s[2], axis=0)
+  mobsv_s[9] = np.mean(obsv_s[1] * obsv_s[3], axis=0)
+  mobsv_s[10] = np.mean(obsv_s[2] * obsv_s[3], axis=0)
+
   # Run division factor for full means
   fn = 1 / (runset.n_runs - 1)
 
   # Construct matrices of linear system for filling unknown values
   # for full mean
-  nonzeromask, zerovals, mat, constmat = construct_fill_matrices(np.sum(obsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
+  nonzeromask, zerovals, mat, constmat = construct_fill_matrices(mobsv_s[1], 0.5 / (norm * frames.particles * runset.n_runs), kerndelta, kernvals)
 
   # Compute parts of estimators for full means
-  est_r12 = density * ((1 + fn) * np.mean(obsv[0]) * np.mean(obsv[1]) + fn * np.mean(obsv[0] * obsv[1]))
-  est_123 = (1 + 3*fn) * np.mean(obsv[0]) * np.mean(obsv[1]) * np.mean(obsv_s[0], axis=0) \
-            + fn * (np.mean(obsv_s[0], axis=0) * np.mean(obsv[0] * obsv[1])
-                    + np.mean(obsv[0]) * np.mean(obsv[1,:,None,None,None] * obsv_s[0], axis=0)
-                    + np.mean(obsv[1]) * np.mean(obsv_s[0] * obsv[0,:,None,None,None], axis=0))
-  est_r6d4 = density * (div_fill(np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-             - fn * div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
-             + fn * div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
-  est_65d4 = div_fill(np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-             - fn * (div_fill(np.mean(obsv_s[1]**2, axis=0) * np.mean(obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat) \
-                     + div_fill(np.mean(obsv_s[2] * obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-                     - div_fill(np.mean(obsv_s[1] * obsv_s[3], axis=0) * np.mean(obsv_s[2], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat) \
-                     - div_fill(np.mean(obsv_s[1] * obsv_s[2], axis=0) * np.mean(obsv_s[3], axis=0), np.mean(obsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
+  est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] + fn * mobsv[2])
+  est_123 = (1 + 3*fn) * mobsv[0] * mobsv[1] * mobsv_s[0] \
+            + fn * (mobsv_s[0] * mobsv[2]
+                    + mobsv[0] * mobsv_s[6]
+                    + mobsv[1] * mobsv_s[5])
+  est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+             - fn * div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+             + fn * div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+  est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+             - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat) \
+                     + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+                     - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat) \
+                     - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
   # Calculate S4 contribution full means
   if qshell_active == True:
     s4_discrete[0], s4_shells[0] = qshell.to_shells(fft.rfftn(est_123 - est_r12).real)
     s4_discrete[1], s4_shells[1] = qshell.to_shells(fft.rfftn(est_r6d4 - est_r12).real)
-    s4_discrete[2], s4_shells[2] = qshell.to_shells(fft.rfftn(np.mean(obsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real)
-    s4_discrete[3], s4_shells[3] = qshell.to_shells(fft.rfftn(np.mean(obsv_s[4], axis=0) - est_65d4).real)
+    s4_discrete[2], s4_shells[2] = qshell.to_shells(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real)
+    s4_discrete[3], s4_shells[3] = qshell.to_shells(fft.rfftn(mobsv_s[4] - est_65d4).real)
   else:
     s4_comp[0] = fft.rfftn(est_123 - est_r12).real
     s4_comp[1] = fft.rfftn(est_r6d4 - est_r12).real
-    s4_comp[2] = fft.rfftn(np.mean(obsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real
-    s4_comp[3] = fft.rfftn(np.mean(obsv_s[4], axis=0) - est_65d4).real
+    s4_comp[2] = fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real
+    s4_comp[3] = fft.rfftn(mobsv_s[4] - est_65d4).real
 
   # Run division factor for jackknife estimators
   fn = 1 / (runset.n_runs - 2)
 
+  # Adjust full means to aid calculating jackknife means
+  mobsv *= runset.n_runs / (runset.n_runs - 1)
+  mobsv_s *= runset.n_runs / (runset.n_runs - 1)
+
   # Compute jackknife estimators of G4 components
   for i in range(0, runset.n_runs):
-    # Mask parts of observables arrays corresponding to given run
-    mobsv[:, i] = np.ma.masked
-    mobsv_s[:, i, :, :, :] = np.ma.masked
+    # Compute means of observables for jackknife mean
+    jmobsv[0] = mobsv[0] - obsv[0][i] / (runset.n_runs - 1)
+    jmobsv[1] = mobsv[1] - obsv[1][i] / (runset.n_runs - 1)
+    jmobsv[2] = mobsv[2] - obsv[0][i] * obsv[1][i] / (runset.n_runs - 1)
+    jmobsv_s[0] = mobsv_s[0] - obsv_s[0][i] / (runset.n_runs - 1)
+    jmobsv_s[1] = mobsv_s[1] - obsv_s[1][i] / (runset.n_runs - 1)
+    jmobsv_s[2] = mobsv_s[2] - obsv_s[2][i] / (runset.n_runs - 1)
+    jmobsv_s[3] = mobsv_s[3] - obsv_s[3][i] / (runset.n_runs - 1)
+    jmobsv_s[4] = mobsv_s[4] - obsv_s[4][i] / (runset.n_runs - 1)
+    jmobsv_s[5] = mobsv_s[5] - obsv[0][i] * obsv_s[0][i] / (runset.n_runs - 1)
+    jmobsv_s[6] = mobsv_s[6] - obsv[1][i] * obsv_s[0][i] / (runset.n_runs - 1)
+    jmobsv_s[7] = mobsv_s[7] - obsv_s[1][i]**2 / (runset.n_runs - 1)
+    jmobsv_s[8] = mobsv_s[8] - obsv_s[1][i] * obsv_s[2][i] / (runset.n_runs - 1)
+    jmobsv_s[9] = mobsv_s[9] - obsv_s[1][i] * obsv_s[3][i] / (runset.n_runs - 1)
+    jmobsv_s[10] = mobsv_s[10] - obsv_s[2][i] * obsv_s[3][i] / (runset.n_runs - 1)
 
     # Construct matrices of linear system for filling unknown values
     # for full mean
-    nonzeromask, zerovals, mat, constmat = construct_fill_matrices(np.sum(mobsv_s[1], axis=0), 0.5 / (norm * frames.particles), kerndelta, kernvals)
+    nonzeromask, zerovals, mat, constmat = construct_fill_matrices(jmobsv_s[1], 0.5 / (norm * frames.particles * (runset.n_runs - 1)), kerndelta, kernvals)
 
     # Compute parts of estimators for jackknife mean
-    est_r12 = density * ((1 + fn) * np.mean(mobsv[0]) * np.mean(mobsv[1]) + fn * np.mean(mobsv[0] * mobsv[1]))
-    est_123 = (1 + 3*fn) * np.mean(mobsv[0]) * np.mean(mobsv[1]) * np.mean(mobsv_s[0], axis=0) \
-              + fn * (np.mean(mobsv_s[0], axis=0) * np.mean(mobsv[0] * mobsv[1])
-                      + np.mean(mobsv[0]) * np.mean(mobsv[1,:,None,None,None] * mobsv_s[0], axis=0)
-                      + np.mean(mobsv[1]) * np.mean(mobsv_s[0] * mobsv[0,:,None,None,None], axis=0))
-    est_r6d4 = density * (div_fill(np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-               - fn * div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat)
-               + fn * div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
-    est_65d4 = div_fill(np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-               - fn * (div_fill(np.mean(mobsv_s[1]**2, axis=0) * np.mean(mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**3, nonzeromask, zerovals, mat, constmat) \
-                       + div_fill(np.mean(mobsv_s[2] * mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0), nonzeromask, zerovals, mat, constmat) \
-                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[3], axis=0) * np.mean(mobsv_s[2], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat) \
-                       - div_fill(np.mean(mobsv_s[1] * mobsv_s[2], axis=0) * np.mean(mobsv_s[3], axis=0), np.mean(mobsv_s[1], axis=0)**2, nonzeromask, zerovals, mat, constmat))
+    est_r12 = density * ((1 + fn) * jmobsv[0] * jmobsv[1] + fn * jmobsv[2])
+    est_123 = (1 + 3*fn) * jmobsv[0] * jmobsv[1] * jmobsv_s[0] \
+              + fn * (jmobsv_s[0] * jmobsv[2]
+                      + jmobsv[0] * jmobsv_s[6]
+                      + jmobsv[1] * jmobsv_s[5])
+    est_r6d4 = density * (div_fill(jmobsv_s[3], jmobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+               - fn * div_fill(jmobsv_s[7] * jmobsv_s[3], jmobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+               + fn * div_fill(jmobsv_s[9], jmobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+    est_65d4 = div_fill(jmobsv_s[2] * jmobsv_s[3], jmobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+               - fn * (div_fill(jmobsv_s[7] * jmobsv_s[2] * jmobsv_s[3], jmobsv_s[1]**3, nonzeromask, zerovals, mat, constmat) \
+                       + div_fill(jmobsv_s[10], jmobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+                       - div_fill(jmobsv_s[9] * jmobsv_s[2], jmobsv_s[1]**2, nonzeromask, zerovals, mat, constmat) \
+                       - div_fill(jmobsv_s[8] * jmobsv_s[3], jmobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
     # Calculate jackknife contributions
     if qshell_active == True:
       run_st_discrete, run_st_shells = qshell.to_shells(fft.rfftn(est_123 - est_r12).real)
       run_cr_discrete, run_cr_shells = qshell.to_shells(fft.rfftn(est_r6d4 - est_r12).real)
-      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.rfftn(np.mean(mobsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real)
-      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.rfftn(np.mean(mobsv_s[4], axis=0) - est_65d4).real)
+      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.rfftn(jmobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real)
+      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.rfftn(jmobsv_s[4] - est_65d4).real)
     else:
       run_st = fft.rfftn(est_123 - est_r12).real
       run_cr = fft.rfftn(est_r6d4 - est_r12).real
-      run_mc = fft.rfftn(np.mean(mobsv_s[3], axis=0) + est_65d4 - est_r6d4 - est_123 + est_r12).real
-      run_sp = fft.rfftn(np.mean(mobsv_s[4], axis=0) - est_65d4).real
+      run_mc = fft.rfftn(jmobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real
+      run_sp = fft.rfftn(jmobsv_s[4] - est_65d4).real
 
     # Accumulate jackknife contributions for jackknife mean
     if qshell_active == True:
@@ -534,10 +586,6 @@ for index, ta in enumerate(lags):
       s4_comp[5] += run_cr**2
       s4_comp[6] += run_mc**2
       s4_comp[7] += run_sp**2
-
-    # Unmask observables arrays
-    mobsv.mask = np.ma.nomask
-    mobsv_s.mask = np.ma.nomask
 
   # Normalize accumulated jackknife means by number of jackknife means
   if qshell_active == True:
