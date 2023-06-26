@@ -9,7 +9,7 @@ This will have to be run for each session before running these scripts.
 Most scripts also require pydcd, which provides DCD file reading and writing
 fuctionality. pydcd can be installed on the following systems with:
 
-OSC Pitzer: pip install --user /fs/project/PHS0243/gm960420/wheels/py3.7/pydcd/0.0.4/pydcd-0.0.4-cp37-cp37m-linux_x86_64.whl
+OSC Pitzer: pip install --user /fs/ess/PHS0243/gm960420/wheels/py3.7/pydcd/0.0.4/pydcd-0.0.4-cp37-cp37m-linux_x86_64.whl
 NCSA Delta: pip install --user /projects/bbsi/gmatsumura/wheels/py3.10/pydcd/0.0.4/pydcd-0.0.4-cp310-cp310-linux_x86_64.whl
 
 This needs only be done once for each user. The installation is persistent
