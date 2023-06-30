@@ -543,15 +543,15 @@ for index, ta in enumerate(lags):
 
     # Calculate jackknife contributions
     if qshell_active == True:
-      run_st_discrete, run_st_shells = qshell.to_shells(fft.rfftn(est_123 - est_r12).real)
-      run_cr_discrete, run_cr_shells = qshell.to_shells(fft.rfftn(est_r6d4 - est_r12).real)
-      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real)
-      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.rfftn(mobsv_s[4] - est_65d4).real)
+      run_st_discrete, run_st_shells = qshell.to_shells(fft.fftshift(fft.rfftn(est_123 - est_r12).real, axes=(0, 1)))
+      run_cr_discrete, run_cr_shells = qshell.to_shells(fft.fftshift(fft.rfftn(est_r6d4 - est_r12).real, axes=(0, 1)))
+      run_mc_discrete, run_mc_shells = qshell.to_shells(fft.fftshift(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real, axes=(0, 1)))
+      run_sp_discrete, run_sp_shells = qshell.to_shells(fft.fftshift(fft.rfftn(mobsv_s[4] - est_65d4).real, axes=(0, 1)))
     else:
-      run_st = fft.rfftn(est_123 - est_r12).real
-      run_cr = fft.rfftn(est_r6d4 - est_r12).real
-      run_mc = fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real
-      run_sp = fft.rfftn(mobsv_s[4] - est_65d4).real
+      run_st = fft.fftshift(fft.rfftn(est_123 - est_r12).real, axes=(0, 1))
+      run_cr = fft.fftshift(fft.rfftn(est_r6d4 - est_r12).real, axes=(0, 1))
+      run_mc = fft.fftshift(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real, axes=(0, 1))
+      run_sp = fft.fftshift(fft.rfftn(mobsv_s[4] - est_65d4).real, axes=(0, 1))
 
     # Accumulate jackknife contributions for jackknife mean
     if qshell_active == True:
@@ -650,7 +650,7 @@ for index, ta in enumerate(lags):
     # 12 - number of frame sets in each run contributing to average of
     #      quantities
     # 13 - frame difference corresponding to t_a
-    for i in range(0, len(qshell.qlist_discrete)):
+    for i in range(0, s4_discrete.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %f %f %d %d\n"
                     %(time_ta,
                       qshell.qlist_discrete[i]*2*math.pi/box_size,
@@ -681,7 +681,7 @@ for index, ta in enumerate(lags):
     # 12 - number of frame sets in each run contributing to average of
     #      quantities
     # 13 - frame difference corresponding to t_a
-    for i in range(0, len(qshell.qlist_shells)):
+    for i in range(0, s4_shells.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %f %f %d %d\n"
                     %(time_ta,
                       (qshell.qb1a+(qshell.qlist_shells[i]+0.5)*qshell.swidth)*2*math.pi/box_size,
