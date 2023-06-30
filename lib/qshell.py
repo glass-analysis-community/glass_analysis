@@ -9,58 +9,47 @@ class qshell():
 
   Attributes:
     qb1: float - Upper (included) boundary of range of q magnitudes
-                 included in first region, which are recorded
-                 according to discrete magnitudes. Value is in real
-                 units.
+      included in first region, which are recorded according to
+      discrete magnitudes. Value is in real units.
     qb2: float - Upper (included) boundary of range of q magnitudes
-                 included in second regions, which is partitioned into
-                 onion shells of q magnitude ranges and recorded based
-                 on which onion shell the magnitude resides in. Value
-                 is in real units.
+      included in second regions, which is partitioned into onion
+      shells of q magnitude ranges and recorded based on which onion
+      shell the magnitude resides in. Value is in real units.
     qb1a: float - qb1 expressed as a multiple of the smallest positive
-                  q magnitude that is periodic within box boundaries,
-                  corresponding to the q increment represented by each
-                  FFT cell.
+      q magnitude that is periodic within box boundaries, corresponding
+      to the q increment represented by each FFT cell.
     qb2a: float - qb2 expressed as a multiple of the smallest positive
-                  q magnitude that is periodic within box boundaries,
-                  corresponding to the q increment represented by each
-                  FFT cell.
-    qb2l: int - Lowest index offset from 0 q vector in spatial FFT
-                array that falls within second q magnitude region.
-    qb2u: int - Highest index offset from 0 q vector in spatial FFT
-                array that falls within second q magnitude region.
+      q magnitude that is periodic within box boundaries, corresponding
+      to the q increment represented by each FFT cell.
     shells: int - Number of onion shells to use in second region
     swidth: float - Width of each onion shell in second region
-    size_fft: int - Size of FFT array in each direction
+    trim_q2: tuple - Tuple used for trimming input values to be sorted
     element_qs: np.array(dtype=np.int64) - Array with same dimensions
-                                           as FFT array with 2 numbers
-                                           corresponding to each value.
-                                           First number indicates which
-                                           region (or none) q vector is
-                                           to be found within. Second
-                                           number indicates the index
-                                           of the magnitude value
-                                           within qlist_discrete_sorted
-                                           or qlist_shells to which the
-                                           given q vector corresponds
-                                           and contributes to.
-    qlist_discrete_sorted: list(float) - List of discrete q vector
-                                         magnitudes within the first
-                                         region.
-    qnorm_discrete_sorted: list(int) - Number of q vectors contributing
-                                       to each magnitude value in
-                                       qlist_discrete_sorted
-    qlist_shells: list(float) - Array of shell indexes used. May be
-                                less than number of specified shells,
-                                as some shells may have no q vectors
-                                that fall within their given q
-                                magnitude range.
+      as FFT array with an index corresponding to how the given q
+      vector is to be sorted. Indices less than len(qlist_discrete)
+      refer to discrete q vectors in first region and indices greater
+      than len(qlist_discrete) refer to q vectors falling into either a
+      shell in the second region or outside both regions. The offset
+      of the index above the lower limit for each region specifies the
+      offset into the corresponding qlist array that the q vector
+      corresponds to.
+    qlist_discrete: list(float) - List of discrete q vector magnitudes
+      within the first region.
+    qnorm_discrete: list(int) - Number of q vectors contributing to
+      each magnitude value in qlist_discrete
+    qlist_shells: list(float) - Array of shell indices used. May be
+      less than number of specified shells, as some shells may have no
+      q vectors that fall within their q magnitude range.
     qnorm_shells: list(int) - Number of q vectors contributing to each
-                              magnitude range in qlist_shells
+      magnitude range in qlist_shells
     shortopts: str - List of short options processed by this module,
-                     used by gnu_getopt()
+      used by gnu_getopt()
   """
   shortopts = "q:v:l:"
+
+  qb1 = None
+  qb2 = None
+  shells = None
 
   def prepare(self, size_fft, box_size):
     """
@@ -88,84 +77,64 @@ class qshell():
     self.qb1a = self.qb1 * box_size / (2 * math.pi)
     self.qb2a = self.qb2 * box_size / (2 * math.pi)
 
-    # Record size_fft for later use
-    self.size_fft = size_fft
+    # Upper and lower bounds for dimensions of q that fit within
+    # second q magnitude region
+    qb2l = max(-int(self.qb2a), -(size_fft // 2))
+    qb2u = min(int(self.qb2a), (size_fft - 1) // 2)
 
-    # Upper and lower bounds for dimensions of q that fit within qb2,
-    # used for matrix dimensioning
-    self.qb2l = max(-int(self.qb2a), -(size_fft // 2))
-    self.qb2u = min(int(self.qb2a), (size_fft - 1) // 2)
+    # Tuple used for trimming input values arrays to used values that
+    # fall withing second q magnitude region
+    self.trim_q2 = (slice(size_fft//2 + qb2l, size_fft//2 + qb2u + 1),
+                    slice(size_fft//2 + qb2l, size_fft//2 + qb2u + 1),
+                    slice(0, qb2u + 1))
 
     # Shell width
     if self.shells != 0:
       self.swidth = (self.qb2a - self.qb1a) / self.shells
 
     # List of shell numbers to use for shell intervals
-    self.qlist_shells = list(range(0, self.shells))
+    self.qlist_shells = np.arange(0, self.shells)
 
-    # List of q values to use for region of discrete q values
-    qlist_discrete = list()
+    # Construct array of squared hypotenuses (q magnitudes)
+    hyp = np.zeros((qb2u + 1 - qb2l, qb2u + 1 - qb2l, qb2u + 1), dtype=np.float64)
+    dim_contrib = np.arange(qb2l, qb2u + 1)**2
+    hyp += dim_contrib[-qb2l:]
+    hyp += dim_contrib[:,None]
+    hyp += dim_contrib[:,None,None]
 
-    # Norm for number of FFT matrix elements corresponding to each element
-    # of qlist, for first and second regions.
-    self.qnorm_shells = [0] * self.shells
-    qnorm_discrete = list()
+    # Find list of q magitude values that fall within first discrete
+    # q magnitude region, as well as number of elements contributing
+    # to each magnitude. Trim to remove values beyond first region.
+    # Values in the second region are clipped to maximum value so that
+    # when shell indices are added, they point to indices of qnorm
+    # corresponding to shells.
+    self.qlist_discrete, element_qs_discrete, self.qnorm_discrete = np.unique(hyp, return_inverse=True, return_counts=True)
+    q1_high_index = np.searchsorted(self.qlist_discrete, self.qb1a**2, side="right")
+    self.qlist_discrete = np.sqrt(self.qlist_discrete[:q1_high_index])
+    self.qnorm_discrete = self.qnorm_discrete[:q1_high_index]
+    element_qs_discrete = np.minimum(q1_high_index - 1, element_qs_discrete)
 
-    # Array of indices in qlist matrix elements correspond to. The first
-    # number in the last dimension is whether the index is not in the q
-    # range (-1), is within the first region of discrete q values (0), or
-    # is within the second region of shells (1). The second number in the
-    # last dimension is the qlist index.
-    self.element_qs = np.empty((self.qb2u - self.qb2l + 1, self.qb2u - self.qb2l + 1, self.qb2u + 1, 2), dtype=np.int64)
+    # Construct bin edges for number of elements contributing to each
+    # shell in second region of q magnitude shells and find location
+    # of each element in shells. If shell number is 0, element is in
+    # first region.
+    q2_edges = np.linspace(self.qb1a, self.qb2a, num=self.shells + 1)
+    element_qs_shells = np.searchsorted(q2_edges**2, hyp, side="left")
+    self.qnorm_shells = np.histogram(element_qs_shells, bins=self.shells, range=(0.5, self.shells + 0.5))[0]
 
-    # Initialize to default of no corresponding index
-    self.element_qs[:, :, :, 0] = -1
+    # Remove shells in second region with no contributing elements
+    empty_shells = np.argwhere(self.qnorm_shells == 0).flatten()
+    if empty_shells.size > 0:
+      self.qnorm_shells = np.delete(self.qnorm_shells, empty_shells)
+      self.qlist_shells = np.delete(self.qlist_shells, empty_shells)
+      element_qs_shells -= np.searchsorted(empty_shells + 1, element_qs_shells, side="right")
 
-    # Find q lengths corresponding to each set of q coordinates
-    for i in range(self.qb2l, self.qb2u + 1):
-      for j in range(self.qb2l, self.qb2u + 1):
-        for k in range(0, self.qb2u + 1):
-          hyp = float(np.linalg.norm((i, j, k)))
-          if hyp > self.qb1a:
-            # Index of onion shell that would include given q
-            shell_index = self.shells - int((self.qb2a - hyp) // self.swidth) - 1
-            if shell_index < self.shells:
-              self.element_qs[i - self.qb2l][j - self.qb2l][k][0] = 1
-              self.element_qs[i - self.qb2l][j - self.qb2l][k][1] = shell_index
-              self.qnorm_shells[shell_index] += 1
-          else:
-            if not (hyp in qlist_discrete):
-              qlist_discrete.append(hyp)
-              qnorm_discrete.append(0)
-            self.element_qs[i - self.qb2l][j - self.qb2l][k][0] = 0
-            self.element_qs[i - self.qb2l][j - self.qb2l][k][1] = qlist_discrete.index(hyp)
-            qnorm_discrete[qlist_discrete.index(hyp)] += 1
+    # Create combined qnorm array for both regions
+    self.qnorm = np.concatenate((self.qnorm_discrete, self.qnorm_shells))
 
-    # Sorted copies of discrete qlist and qnorm
-    self.qlist_discrete_sorted, self.qnorm_discrete_sorted = zip(*sorted(zip(qlist_discrete, qnorm_discrete)))
-
-    # Delete q elements with 0 norm (possible for shells)
-    for i in reversed(range(0, len(self.qlist_shells))):
-      if self.qnorm_shells[i] == 0:
-        self.qlist_shells.pop(i)
-        self.qnorm_shells.pop(i)
-        # Shift element_qs values to take into account new ordering of
-        # qlistsorted
-        for j in range(self.qb2l, self.qb2u + 1):
-          for k in range(self.qb2l, self.qb2u + 1):
-            for l in range(0, self.qb2u + 1):
-              # If within shell region and above deleted shell value
-              if self.element_qs[j][k][l][0] == 1 and self.element_qs[j][k][l][1] >= i:
-                self.element_qs[j][k][l][1] -= 1
-
-    # Modify element_qs values to point to indices in qlistsorted rather
-    # than qlist
-    for i in range(self.qb2l, self.qb2u + 1):
-      for j in range(self.qb2l, self.qb2u + 1):
-        for k in range(0, self.qb2u + 1):
-          # Only sort discrete values, shell values already sorted
-          if self.element_qs[i][j][k][0] == 0:
-            self.element_qs[i][j][k][1] = self.qlist_discrete_sorted.index(qlist_discrete[self.element_qs[i][j][k][1]])
+    # Add element_qs for first and second region together so that they
+    # correspond to correct index in qnorm.
+    self.element_qs = element_qs_discrete.reshape(hyp.shape) + element_qs_shells
 
   def to_shells(self, values):
     """
@@ -178,37 +147,24 @@ class qshell():
 
     Arguments:
       values: np.array() -  Values to be sorted and averaged into
-                            output values based on q magnitude. Last
-                            three dimensions are taken to be x, y, and
-                            z spatial indices for q vector.
+        output values based on q magnitude. Last three dimensions are
+        taken to be x, y, and z spatial indices for q vector.
     """
-    # Create accumulators for values in shells with same shape as
-    # input values array, except for last three dimensions, which are
-    # spatial dimensions that are converted to a single dimension for
-    # the shell index
-    qaccum_discrete = np.zeros_like(values[...,0,0,0], shape=(*(values[...,0,0,0].shape), len(self.qlist_discrete_sorted)))
-    qaccum_shells = np.zeros_like(values[...,0,0,0], shape=(*(values[...,0,0,0].shape), len(self.qlist_shells)))
+    # Create accumulators for values with same shape as input values
+    # array, except for last three dimensions, which are spatial
+    # dimensions that are converted to a single dimension for the shell
+    # index
+    qout = np.zeros_like(values[...,0,0,0], shape=(*(values[...,0,0,0].shape), len(self.qnorm)))
 
-    for i in range(self.qb2l, self.qb2u + 1):
-      for j in range(self.qb2l, self.qb2u + 1):
-        for k in range(0, self.qb2u + 1):
-          # Index of qlist we are to use
-          qcurrent = self.element_qs[i - self.qb2l][j - self.qb2l][k]
-
-          # If matrix element corresponds to used q value in either
-          # qlist_discrete_sorted or qlist_shells
-          if self.element_qs[i - self.qb2l][j - self.qb2l][k][0] == 0:
-            # Accumulate values to corresponding discrete q length
-            qaccum_discrete[..., self.element_qs[i - self.qb2l][j - self.qb2l][k][1]] += values[..., (self.size_fft//2)+i, (self.size_fft//2)+j, k]
-          elif self.element_qs[i - self.qb2l][j - self.qb2l][k][0] == 1:
-            # Accumulate values to corresponding q shell index
-            qaccum_shells[..., self.element_qs[i - self.qb2l][j - self.qb2l][k][1]] += values[..., (self.size_fft//2)+i, (self.size_fft//2)+j, k]
+    # Bin values according to q magnitude index in element_qs
+    for i in np.ndindex(values[...,0,0,0].shape):
+      qout[i] = np.histogram(self.element_qs, bins=len(self.qnorm), range=(-0.5, len(self.qnorm) - 0.5), weights=values[i][self.trim_q2])[0]
 
     # Normalize q values for number of contributing elements
-    qaccum_discrete /= self.qnorm_discrete_sorted
-    qaccum_shells /= self.qnorm_shells
+    qout /= self.qnorm
 
-    return qaccum_discrete, qaccum_shells
+    # Return arrays for first and second regions
+    return qout[...,:len(self.qlist_discrete)], qout[...,len(self.qlist_discrete):]
 
   def catch_opt(self, o, a):
     """
@@ -218,9 +174,9 @@ class qshell():
 
     Arguments:
       o: str - Name of option to process, from array produced by
-               gnu_getopt().
+        gnu_getopt().
       a: str - Value of option to process, from array produced by
-               gnu_getopt().
+        gnu_getopt().
     """
     if o == "-q":
       self.qb1 = float(a)

@@ -493,8 +493,8 @@ for index, tb in enumerate(tbvals):
     for i in range(0, discrete_s4.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
                     %(time_tb,
-                      qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
-                      qshell.qnorm_discrete_sorted[i],
+                      qshell.qlist_discrete[i]*2*math.pi/box_size,
+                      qshell.qnorm_discrete[i],
                       discrete_s4[stypes.total.value][i],
                       discrete_s4[stypes.self.value][i],
                       discrete_s4[stypes.distinct.value][i],

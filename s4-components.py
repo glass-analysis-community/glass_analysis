@@ -226,7 +226,7 @@ mobsv_s = np.empty((11, size_fft, size_fft, size_fft), dtype=np.float64)
 # 10 - S4^mc - S4 mixed collective jackknife contribution
 # 11 - S4^sp - S4 single particle oscillation jackknife contribution
 if qshell_active == True:
-  s4_discrete = np.empty((12, len(qshell.qlist_discrete_sorted)), dtype=np.float64)
+  s4_discrete = np.empty((12, len(qshell.qlist_discrete)), dtype=np.float64)
   s4_shells = np.empty((12, len(qshell.qlist_shells)), dtype=np.float64)
 else:
   s4_comp = np.empty((12, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
@@ -650,11 +650,11 @@ for index, ta in enumerate(lags):
     # 12 - number of frame sets in each run contributing to average of
     #      quantities
     # 13 - frame difference corresponding to t_a
-    for i in range(0, len(qshell.qlist_discrete_sorted)):
+    for i in range(0, len(qshell.qlist_discrete)):
       outfile.write("%f %f %d %f %f %f %f %f %f %f %f %d %d\n"
                     %(time_ta,
-                      qshell.qlist_discrete_sorted[i]*2*math.pi/box_size,
-                      qshell.qnorm_discrete_sorted[i],
+                      qshell.qlist_discrete[i]*2*math.pi/box_size,
+                      qshell.qnorm_discrete[i],
                       s4_discrete[0][i],
                       s4_discrete[1][i],
                       s4_discrete[2][i],
