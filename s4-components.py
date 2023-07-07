@@ -134,6 +134,7 @@ print("#nset: %d" %trajset.fileframes[-1])
 print("#N: %d" %trajset.fparticles)
 print("#timestep: %f" %trajset.timestep)
 print("#tbsave: %f" %trajset.tbsave)
+print("#size_fft: %f" %size_fft)
 
 # Spatial size of individual cell for FFT
 cell = box_size / size_fft
@@ -143,10 +144,10 @@ density = frames.particles / size_fft**3
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Largest possible positive and negative lags
 prog.max_val = frames.n_frames - 1 - max(tb, tb - tc)
@@ -350,6 +351,9 @@ print("Entering S4 components calculation", file=sys.stderr)
 if dumpfiles == False:
   outfile = sys.stdout
 
+# Accumulated total number of zero elements of divisor matrices
+zero_acc = 0
+
 # Iterate over lags (t_a)
 for index, ta in enumerate(lags):
   # Clear lag accumulators
@@ -470,6 +474,9 @@ for index, ta in enumerate(lags):
   # for full mean
   nonzeromask, zerovals, mat, constmat = construct_fill_matrices(mobsv_s[1], 0.5 / (norm * frames.particles * runset.n_runs), kerndelta, kernvals)
 
+  # Accumulate to number of zero values
+  zero_acc += zerovals.shape[0]
+
   # Compute parts of estimators for full means
   est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] + fn * mobsv[2])
   est_123 = (1 + 3*fn) * mobsv[0] * mobsv[1] * mobsv_s[0] \
@@ -525,6 +532,9 @@ for index, ta in enumerate(lags):
     # Construct matrices of linear system for filling unknown values
     # for full mean
     nonzeromask, zerovals, mat, constmat = construct_fill_matrices(mobsv_s[1], 0.5 / (norm * frames.particles * (runset.n_runs - 1)), kerndelta, kernvals)
+
+    # Accumulate to number of zero values
+    zero_acc += zerovals.shape[0]
 
     # Compute parts of estimators for jackknife mean
     est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] + fn * mobsv[2])
@@ -735,3 +745,13 @@ for index, ta in enumerate(lags):
   # If output files for each lag used, close file for this lag
   if dumpfiles == True:
     outfile.close()
+
+# Find average number of zero elements in matrices
+zero_acc /= lags.size * (runset.n_runs + 1)
+
+print("#Performance statistics:",
+      "#  FFT size: %d" %size_fft,
+      "#  Average matrix zeros: %f" %zero_acc,
+      "#  Particle number: %d" %N,
+      "#  Number of lags: %d" %lags.size,
+      sep="\n", file=sys.stderr)

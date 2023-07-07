@@ -106,10 +106,10 @@ print("#a = %f" %radius)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 if frames.n_atoms == None and (legendre != None or thetab != None):
   raise RuntimeError("Legendre polynomials degree or theta function threshold of orientation correlations specified without being in polyatomic mode")

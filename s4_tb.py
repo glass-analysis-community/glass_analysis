@@ -146,10 +146,10 @@ print("#tbsave: %f" %trajset.tbsave)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Largest and smallest possible average interval widths (t_b),
 # adjusting for both space taken up by t_a and t_c and intervals at the

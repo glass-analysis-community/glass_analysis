@@ -93,10 +93,10 @@ print("#a = %f" %radius)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Largest possible positive and negative lags
 prog.max_val = frames.n_frames - 1

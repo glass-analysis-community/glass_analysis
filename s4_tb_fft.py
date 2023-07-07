@@ -150,10 +150,10 @@ cell = box_size / size_fft
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Largest and smallest possible average interval widths (t_b),
 # adjusting for both space taken up by t_a and t_c and intervals at the
@@ -230,6 +230,7 @@ print("#dt = %d" %framediff)
 print("#n_tbvals = %d" %tbvals.size)
 print("#t_a = %d" %ta)
 print("#t_c = %d" %tc)
+print("#size_fft: %f" %size_fft)
 
 # Print information about w function calculation
 wcalc.print_info()

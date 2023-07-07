@@ -110,10 +110,10 @@ print("#a = %f" %radius)
 
 # End of set of frames to use for initial times
 if initend == None:
-  initend = trajset.fileframes[-1]
+  initend = frames.final
 else:
-  if initend > trajset.fileframes[-1]:
-    raise RuntimeError("End initial time frame beyond set of frames")
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Ensure frame set is long enough to work with chosen cycle
 if frames.n_frames < 2 * set_len:
