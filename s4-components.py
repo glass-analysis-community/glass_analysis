@@ -752,6 +752,6 @@ zero_acc /= lags.size * (runset.n_runs + 1)
 print("#Performance statistics:",
       "#  FFT size: %d" %size_fft,
       "#  Average matrix zeros: %f" %zero_acc,
-      "#  Particle number: %d" %N,
+      "#  Particle number: %d" %frames.particles,
       "#  Number of lags: %d" %lags.size,
       sep="\n", file=sys.stderr)
