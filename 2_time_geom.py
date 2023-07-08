@@ -108,13 +108,6 @@ print("#timestep: %f" %trajset.timestep)
 print("#q = %f" %q)
 print("#a = %f" %radius)
 
-# End of set of frames to use for initial times
-if initend == None:
-  initend = frames.final
-else:
-  if initend > frames.final:
-    raise RuntimeError("End initial time frame beyond set of analyzed frames")
-
 # Ensure frame set is long enough to work with chosen cycle
 if frames.n_frames < 2 * set_len:
   raise RuntimeError("Trajectory set not long enough for averaging "
@@ -157,6 +150,13 @@ lag_cycle_sum = np.insert(np.cumsum(lag_cycle), 0, 0)
 
 # Prepare frames object for calculation
 frames.prepare()
+
+# End of set of frames to use for initial times
+if initend == None:
+  initend = frames.final
+else:
+  if initend > frames.final:
+    raise RuntimeError("End initial time frame beyond set of analyzed frames")
 
 # Largest possible positive and negative lags
 prog.max_val = lag_sum * ((frames.n_frames - 1) // set_len) + lag_cycle_sum[(frames.n_frames - 1) % set_len]
