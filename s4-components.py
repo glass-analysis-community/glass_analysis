@@ -494,15 +494,15 @@ for index, ta in enumerate(lags):
 
   # Calculate S4 contribution full means
   if qshell_active == True:
-    s4_discrete[0], s4_shells[0] = qshell.to_shells(fft.rfftn(est_123 - est_r12).real)
-    s4_discrete[1], s4_shells[1] = qshell.to_shells(fft.rfftn(est_r6d4 - est_r12).real)
-    s4_discrete[2], s4_shells[2] = qshell.to_shells(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real)
-    s4_discrete[3], s4_shells[3] = qshell.to_shells(fft.rfftn(mobsv_s[4] - est_65d4).real)
+    s4_discrete[0], s4_shells[0] = qshell.to_shells(fft.fftshift(fft.rfftn(est_123 - est_r12).real, axes=(0, 1)))
+    s4_discrete[1], s4_shells[1] = qshell.to_shells(fft.fftshift(fft.rfftn(est_r6d4 - est_r12).real, axes=(0, 1)))
+    s4_discrete[2], s4_shells[2] = qshell.to_shells(fft.fftshift(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real, axes=(0, 1)))
+    s4_discrete[3], s4_shells[3] = qshell.to_shells(fft.fftshift(fft.rfftn(mobsv_s[4] - est_65d4).real, axes=(0, 1)))
   else:
-    s4_comp[0] = fft.rfftn(est_123 - est_r12).real
-    s4_comp[1] = fft.rfftn(est_r6d4 - est_r12).real
-    s4_comp[2] = fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real
-    s4_comp[3] = fft.rfftn(mobsv_s[4] - est_65d4).real
+    s4_comp[0] = fft.fftshift(fft.rfftn(est_123 - est_r12).real, axes=(0, 1))
+    s4_comp[1] = fft.fftshift(fft.rfftn(est_r6d4 - est_r12).real, axes=(0, 1))
+    s4_comp[2] = fft.fftshift(fft.rfftn(mobsv_s[3] + est_65d4 - est_r6d4 - est_123 + est_r12).real, axes=(0, 1))
+    s4_comp[3] = fft.fftshift(fft.rfftn(mobsv_s[4] - est_65d4).real, axes=(0, 1))
 
   # Run division factor for jackknife estimators
   fn = 1 / (runset.n_runs - 2)
