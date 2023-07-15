@@ -400,13 +400,13 @@ for index, ta in enumerate(lags):
       obsv[0][i] += np.mean(w[0])
       obsv[1][i] += np.mean(w[1])
 
-      # Bin particle positions, convolve, and accumulate
+      # Bin particle positions, correlate, and accumulate
       lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)[0]
       lag_bins[1] = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)[0]
       lag_bins[0] = fft.irfftn(fft.rfftn(lag_bins[0]) * np.conjugate(fft.rfftn(lag_bins[1])), s=lag_bins.shape[1:])
       obsv_s[0][i] += lag_bins[0]
 
-      # Bin weighted particle positions for G4, convolve, and
+      # Bin weighted particle positions for G4, correlate, and
       # accumulate. While the accumulated value is the total part, it
       # will be converted to the distinct part later.
       lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
@@ -478,14 +478,14 @@ for index, ta in enumerate(lags):
   zero_acc += zerovals.shape[0]
 
   # Compute parts of estimators for full means
-  est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] + fn * mobsv[2])
+  est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] - fn * mobsv[2])
   est_123 = (1 + 3*fn) * mobsv[0] * mobsv[1] * mobsv_s[0] \
-            + fn * (mobsv_s[0] * mobsv[2]
+            - fn * (mobsv_s[0] * mobsv[2]
                     + mobsv[0] * mobsv_s[6]
                     + mobsv[1] * mobsv_s[5])
   est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
-             - fn * div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-             + fn * div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+                        - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                                - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
   est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
              - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
                      + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
@@ -537,18 +537,18 @@ for index, ta in enumerate(lags):
     zero_acc += zerovals.shape[0]
 
     # Compute parts of estimators for jackknife mean
-    est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] + fn * mobsv[2])
+    est_r12 = density * ((1 + fn) * mobsv[0] * mobsv[1] - fn * mobsv[2])
     est_123 = (1 + 3*fn) * mobsv[0] * mobsv[1] * mobsv_s[0] \
-              + fn * (mobsv_s[0] * mobsv[2]
+              - fn * (mobsv_s[0] * mobsv[2]
                       + mobsv[0] * mobsv_s[6]
                       + mobsv[1] * mobsv_s[5])
-    est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-               - fn * div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-               + fn * div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+    est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                          - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                                  - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
     est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-               - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat) \
-                       + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-                       - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat) \
+               - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                       + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                       - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
                        - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
     # Calculate jackknife contributions
