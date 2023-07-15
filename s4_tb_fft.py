@@ -58,10 +58,10 @@ def usage():
   frames.usage()
   print("-k Last frame number in range to use for initial times (index starts at 1)",
         "-d Spacing between initial times (dt)",
-        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
+        "-x Dimensionality of FFT matrix, length in each dimension",
         "-y Box size in each dimension (assumed to be cubic, required)",
-        "-a Offset between centers of begginning and end intervals in frames (t_a)",
-        "-c Difference between intervals in frames (t_c)",
+        "-a Offset between centers of begginning and end intervals in frames (t_a, default=0)",
+        "-c Difference between intervals in frames (t_c, default=0)",
         "-i Write output to files, one for each t_b value",
         "-h Print usage",
         sep="\n", file=sys.stderr)
@@ -95,7 +95,7 @@ for o, a in opts:
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
-    size_fft = int(a) + 1
+    size_fft = int(a)
   elif o == "-y":
     box_size = float(a)
   elif o == "-a":
@@ -206,9 +206,11 @@ else:
 # total component of S4
 run_total_s4 = np.empty((size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
-# Structure factor variance for each interval width. The first and
-# second fft dimensions include values for negative vectors. Since all
-# inputs are real, this is not required for the third fft dimension.
+# Array for S4 values. The first and second fft dimensions include
+# values for negative vectors. Since all inputs are real, this is not
+# required for the third fft dimension, as the values would be the same
+# for a vector in the exact opposite direction (with all vector
+# components of opposite sign).
 s4 = np.empty((n_stypes, size_fft, size_fft, (size_fft // 2) + 1), dtype=np.float64)
 
 # W function values for each particle
@@ -289,25 +291,25 @@ for index, tb in enumerate(tbvals):
 
       # Convert particle positions into bin numbers and wrap for
       # binning
-      x0i = (x0 // cell).astype(np.int64) % size_fft
-      y0i = (y0 // cell).astype(np.int64) % size_fft
-      z0i = (z0 // cell).astype(np.int64) % size_fft
+      x0i = (x0 // cell) % size_fft
+      y0i = (y0 // cell) % size_fft
+      z0i = (z0 // cell) % size_fft
 
       # Sort first interval w values into bins for FFT
-      a_bins, dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
+      a_bins = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
 
       # Sort second interval w values into bins for FFT if needed
       if ta != 0 or tc != 0:
         if ta - tc == 0:
-          b_bins, dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])
+          b_bins = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])[0]
         else:
           # Convert particle positions into bin numbers and wrap for
           # binning
-          x2i = (x2 // cell).astype(np.int64) % size_fft
-          y2i = (y2 // cell).astype(np.int64) % size_fft
-          z2i = (z2 // cell).astype(np.int64) % size_fft
+          x2i = (x2 // cell) % size_fft
+          y2i = (y2 // cell) % size_fft
+          z2i = (z2 // cell) % size_fft
 
-          b_bins, dummy = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])
+          b_bins = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])[0]
 
       # Calculate total part of S4
       if ta != 0 or tc != 0:
@@ -338,7 +340,7 @@ for index, tb in enumerate(tbvals):
         z0i = (z0i - z2i) % size_fft
 
         # Bin multiplied w values according to coordinate differences
-        self_bins, dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
+        self_bins = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
 
         # Perform FFT, thereby calculating self S4 for current index
         run_self_s4 += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / frames.particles

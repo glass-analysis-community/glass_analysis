@@ -28,7 +28,7 @@ tb = 1
 tc = 0
 # Whether to write output to files rather than stdout
 dumpfiles = False
-# Progression specification/generation object for t_b values
+# Progression specification/generation object for lags
 prog = lib.progression.prog()
 # Run set opening object
 runset = lib.opentraj.runset()
@@ -50,10 +50,10 @@ def usage():
   frames.usage()
   print("-k Last frame number in range to use for initial times (index starts at 1)",
         "-d Spacing between initial times as well as lag values (dt)",
-        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
+        "-x Dimensionality of FFT matrix, length in each dimension",
         "-y Box size in each dimension (assumed to be cubic, required)",
-        "-b Average interval in frames (t_b)",
-        "-c Difference between intervals in frames (t_c)",
+        "-b Average interval in frames (t_b, default=1)",
+        "-c Difference between intervals in frames (t_c, default=0)",
         "-i Write output to files, one for each lag time",
         "-h Print usage",
         sep="\n", file=sys.stderr)
@@ -87,7 +87,7 @@ for o, a in opts:
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
-    size_fft = int(a) + 1
+    size_fft = int(a)
   elif o == "-y":
     box_size = float(a)
   elif o == "-b":
@@ -191,9 +191,9 @@ obsv_s = np.empty((5, runset.n_runs, size_fft, size_fft, size_fft), dtype=np.flo
 
 # Means of observables and combined observables not associated with a
 # spatial vector. In first dimension:
-# 0 - C(t_1,t_2) - (X1)
-# 1 - C(t_3,t_4) - (X2)
-# 2 - C(t_1,t_2) * C(t_3,t_4) - (X1 * X2)
+# 0 - C(t_1,t_2) (X1)
+# 1 - C(t_3,t_4) (X2)
+# 2 - C(t_1,t_2) * C(t_3,t_4) (X1 * X2)
 mobsv = np.empty(3, dtype=np.float64)
 
 # Means of observables and combined observables that are associated
@@ -389,28 +389,28 @@ for index, ta in enumerate(lags):
 
       # Convert particle positions into bin numbers and wrap for
       # binning
-      x0i = (x0 // cell).astype(np.int64) % size_fft
-      y0i = (y0 // cell).astype(np.int64) % size_fft
-      z0i = (z0 // cell).astype(np.int64) % size_fft
-      x2i = (x2 // cell).astype(np.int64) % size_fft
-      y2i = (y2 // cell).astype(np.int64) % size_fft
-      z2i = (z2 // cell).astype(np.int64) % size_fft
+      x0i = (x0 // cell) % size_fft
+      y0i = (y0 // cell) % size_fft
+      z0i = (z0 // cell) % size_fft
+      x2i = (x2 // cell) % size_fft
+      y2i = (y2 // cell) % size_fft
+      z2i = (z2 // cell) % size_fft
 
       # Accumulate mean w function values
       obsv[0][i] += np.mean(w[0])
       obsv[1][i] += np.mean(w[1])
 
       # Bin particle positions, convolve, and accumulate
-      lag_bins[0], dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)
-      lag_bins[1], dummy = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)
+      lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)[0]
+      lag_bins[1] = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)[0]
       lag_bins[0] = fft.irfftn(fft.rfftn(lag_bins[0]) * np.conjugate(fft.rfftn(lag_bins[1])), s=lag_bins.shape[1:])
       obsv_s[0][i] += lag_bins[0]
 
       # Bin weighted particle positions for G4, convolve, and
       # accumulate. While the accumulated value is the total part, it
       # will be converted to the distinct part later.
-      lag_bins[0], dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
-      lag_bins[1], dummy = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])
+      lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
+      lag_bins[1] = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])[0]
       lag_bins[0] = fft.irfftn(fft.rfftn(lag_bins[0]) * np.conjugate(fft.rfftn(lag_bins[1])), s=lag_bins.shape[1:])
       obsv_s[3][i] += lag_bins[0]
 
@@ -428,12 +428,12 @@ for index, ta in enumerate(lags):
       w[0] *= w[1]
 
       # Bin self particle position differences and accumulate
-      lag_bins[0], dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)
+      lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3)[0]
       obsv_s[2][i] += lag_bins[0]
 
       # Bin weighted self particle position differences for G4 and
       # accumulate
-      lag_bins[0], dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
+      lag_bins[0] = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
       obsv_s[4][i] += lag_bins[0]
 
       # Accumulate the normalization value for this lag, which will be
@@ -483,13 +483,13 @@ for index, ta in enumerate(lags):
             + fn * (mobsv_s[0] * mobsv[2]
                     + mobsv[0] * mobsv_s[6]
                     + mobsv[1] * mobsv_s[5])
-  est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+  est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
              - fn * div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
              + fn * div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
   est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-             - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat) \
-                     + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-                     - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat) \
+             - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                     + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                     - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
                      - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
   # Calculate S4 contribution full means

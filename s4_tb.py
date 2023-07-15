@@ -57,10 +57,10 @@ def usage():
   frames.usage()
   print("-k Last frame number in range to use for initial times (index starts at 1)",
         "-d Spacing between initial times (dt)",
-        "-x Number of Fourier transform vector lengths to be used in each direction in addition to q=0",
+        "-x Number of Fourier transform vector lengths to be used in each direction",
         "-y Box size in each dimension (assumed to be cubic, required)",
-        "-a Offset between centers of begginning and end intervals in frames (t_a)",
-        "-c Difference between intervals in frames (t_c)",
+        "-a Offset between centers of begginning and end intervals in frames (t_a, default=0)",
+        "-c Difference between intervals in frames (t_c, default=0)",
         "-i Write output to files, one for each t_b value",
         "-h Print usage",
         sep="\n", file=sys.stderr)
@@ -94,7 +94,7 @@ for o, a in opts:
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
-    size_ft = int(a) + 1
+    size_ft = int(a)
   elif o == "-y":
     box_size = float(a)
   elif o == "-a":

@@ -57,11 +57,11 @@ def usage():
   trajset.usage()
   frames.usage()
   print("-k Last frame number in range to use for initial times (index starts at 1)",
-        "-d Spacing between initial times as well as lag values (dt)",
-        "-x Dimensionality of FFT matrix, length in each dimension in addition to 0",
+        "-d Spacing between initial times (dt)",
+        "-x Dimensionality of FFT matrix, length in each dimension",
         "-y Box size in each dimension (assumed to be cubic, required)",
-        "-b Average interval in frames (t_b)",
-        "-c Difference between intervals in frames (t_c)",
+        "-b Average interval in frames (t_b, default=1)",
+        "-c Difference between intervals in frames (t_c, default=0)",
         "-i Write output to files, one for each lag time",
         "-h Print usage",
         sep="\n", file=sys.stderr)
@@ -95,7 +95,7 @@ for o, a in opts:
   elif o == "-d":
     framediff = int(a)
   elif o == "-x":
-    size_fft = int(a) + 1
+    size_fft = int(a)
   elif o == "-y":
     box_size = float(a)
   elif o == "-b":
@@ -251,18 +251,18 @@ for index, ta in enumerate(lags):
 
       # Convert particle positions into bin numbers and wrap for
       # binning
-      x0i = (x0 // cell).astype(np.int64) % size_fft
-      y0i = (y0 // cell).astype(np.int64) % size_fft
-      z0i = (z0 // cell).astype(np.int64) % size_fft
-      x2i = (x2 // cell).astype(np.int64) % size_fft
-      y2i = (y2 // cell).astype(np.int64) % size_fft
-      z2i = (z2 // cell).astype(np.int64) % size_fft
+      x0i = (x0 // cell) % size_fft
+      y0i = (y0 // cell) % size_fft
+      z0i = (z0 // cell) % size_fft
+      x2i = (x2 // cell) % size_fft
+      y2i = (y2 // cell) % size_fft
+      z2i = (z2 // cell) % size_fft
 
       # Sort first interval w values into bins for FFT
-      a_bins, dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
+      a_bins = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
 
       # Sort second interval w values into bins for FFT
-      b_bins, dummy = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])
+      b_bins = np.histogramdd((x2i, y2i, z2i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[1])[0]
 
       # Calculate total part of S4
       run_total_s4 += fft.fftshift((fft.rfftn(a_bins) * np.conjugate(fft.rfftn(b_bins))).real, axes=(0, 1)) / frames.particles
@@ -281,7 +281,7 @@ for index, ta in enumerate(lags):
       w[0] *= w[1]
 
       # Bin multiplied w values according to coordinate differences
-      self_bins, dummy = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])
+      self_bins = np.histogramdd((x0i, y0i, z0i), bins=size_fft, range=((-0.5, size_fft - 0.5), ) * 3, weights=w[0])[0]
 
       # Perform FFT, thereby calculating self S4 for current index
       run_self_s4 += fft.fftshift(fft.rfftn(self_bins).real, axes=(0, 1)) / frames.particles
