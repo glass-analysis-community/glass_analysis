@@ -447,7 +447,7 @@ for index, ta in enumerate(lags):
   # Compute distinct part of G4 from self and total parts
   obsv_s[3] -= obsv_s[4]
 
-  # Normalize values by number of initial times
+  # Normalize values by number of initial times and particles
   obsv /= norm
   obsv_s /= (norm * frames.particles)
 
@@ -483,14 +483,23 @@ for index, ta in enumerate(lags):
             - fn * (mobsv_s[0] * mobsv[2]
                     + mobsv[0] * mobsv_s[6]
                     + mobsv[1] * mobsv_s[5])
-  est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+  if ta - tc == 0:
+    # Move G_s out of zero-filling routine numerator for cases when
+    # t1 == t3
+    est_r6d4 = div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
                         - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-                                - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
-  est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-             - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-                     + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
-                     - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
-                     - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+                                - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+    est_65d4 = mobsv_s[2] * est_r6d4
+    est_r6d4 *= density
+  else:
+    est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                          - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                                  - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
+    est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+               - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                       + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                       - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
+                       - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
   # Calculate S4 contribution full means
   if qshell_active == True:
@@ -542,14 +551,23 @@ for index, ta in enumerate(lags):
               - fn * (mobsv_s[0] * mobsv[2]
                       + mobsv[0] * mobsv_s[6]
                       + mobsv[1] * mobsv_s[5])
-    est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+    if ta - tc == 0:
+      # Move G_s out of zero-filling routine numerator for cases when
+      # t1 == t3
+      est_r6d4 = div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
                           - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-                                  - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
-    est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
-               - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
-                       + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
-                       - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
-                       - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+                                  - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
+      est_65d4 = mobsv_s[2] * est_r6d4
+      est_r6d4 *= density
+    else:
+      est_r6d4 = density * (div_fill(mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                            - fn * (div_fill(mobsv_s[7] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                                    - div_fill(mobsv_s[9], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)))
+      est_65d4 = div_fill(mobsv_s[2] * mobsv_s[3], mobsv_s[1], nonzeromask, zerovals, mat, constmat) \
+                 - fn * (div_fill(mobsv_s[7] * mobsv_s[2] * mobsv_s[3], mobsv_s[1]**3, nonzeromask, zerovals, mat, constmat)
+                         + div_fill(mobsv_s[10], mobsv_s[1], nonzeromask, zerovals, mat, constmat)
+                         - div_fill(mobsv_s[9] * mobsv_s[2], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat)
+                         - div_fill(mobsv_s[8] * mobsv_s[3], mobsv_s[1]**2, nonzeromask, zerovals, mat, constmat))
 
     # Calculate jackknife contributions
     if qshell_active == True:
