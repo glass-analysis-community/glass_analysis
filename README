@@ -55,9 +55,9 @@ s4_ta.py
   sorted according to q vector magnitudes. With such options, output values
   for different q vectors are binned according to the magnitude of q, with q
   magnitudes under a certain threshold being reported individually, and q
-  magnitudes above such threshold being binned into sets of onion shells with
-  a range of magnitudes. This script may use large amounts of memory if
-  trajectory files have many particles and many q values are used.
+  magnitudes above such threshold being binned into sets of onion shells each
+  holding a range of magnitudes. This script may use large amounts of memory
+  if trajectory files have many particles and many q values are used.
 
 s4_ta_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a linear
@@ -75,8 +75,8 @@ s4_tb.py
   values for different q vectors are binned according to the magnitude of q,
   with q magnitudes under a certain threshold being reported individually, and
   q magnitudes above such threshold being binned into sets of onion shells
-  with a range of magnitudes. This script may use large amounts of memory if
-  trajectory files have many particles and many q values are used.
+  each holding a range of magnitudes. This script may use large amounts of
+  memory if trajectory files have many particles and many q values are used.
 
 s4_tb_fft.py
   Calculates S4 from multiple runs. This script calculates S4 for a
@@ -89,7 +89,20 @@ s4_tb_fft.py
 s4-components.py
   Calculates initial structure, collective relaxation, mixed collective, and
   single particle contributions to S4. This script calculates S4 for a
-  progression of values of t_a, which represents the average interval
+  progression of values of t_a, which represents the lag between intervals
+  (((t_1 + t_2) - (t_3 + t_4)) / 2). This script uses spatial
+  FFTs to accelerate calculation. However, this may lead to a loss in
+  accuracy, especially for small FFT matrix sizes. If specified via options,
+  output may be sorted according to q vector magnitudes. With such options,
+  output values for different q vectors are binned according to the magnitude
+  of q, with q magnitudes under a certain threshold being reported
+  individually, and q magnitudes above such threshold being binned into sets
+  of onion shells each holding a range of magnitudes.
+
+s4-components_tb.py
+  Calculates initial structure, collective relaxation, mixed collective, and
+  single particle contributions to S4. This script calculates S4 for a
+  progression of values of t_b, which represents the average interval
   length (((t_2 - t_1) + (t_4 - t_3)) / 2). This script uses spatial
   FFTs to accelerate calculation. However, this may lead to a loss in
   accuracy, especially for small FFT matrix sizes. If specified via options,
@@ -97,7 +110,7 @@ s4-components.py
   output values for different q vectors are binned according to the magnitude
   of q, with q magnitudes under a certain threshold being reported
   individually, and q magnitudes above such threshold being binned into sets
-  of onion shells with a range of magnitudes.
+  of onion shells each holding a range of magnitudes.
 
 Most scripts make use of shared functionality located in modules in the lib/
 directory. To ensure these modules are found at runtime, it is recommended
