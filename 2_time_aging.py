@@ -1,7 +1,6 @@
 import numpy as np
 import pydcd
 import sys
-import math
 import getopt
 import enum
 
@@ -102,12 +101,6 @@ frames.prepare()
 if np.any(initial >= frames.n_frames):
   raise RuntimeError("At least one initial frame number is beyond range of frames")
 
-# Print basic properties of files and analysis
-print("#nset: %d" %frames.fileframes[-1])
-print("#N: %d" %frames.fparticles)
-print("#q = %f" %q)
-print("#a = %f" %radius)
-
 if frames.n_atoms == None and (legendre != None or thetab != None):
   raise RuntimeError("Legendre polynomials degree or theta function threshold of orientation correlations specified without being in polyatomic mode")
 
@@ -117,6 +110,12 @@ if frames.n_atoms != None:
 
   if thetab == None:
     thetab = 0.9
+
+# Print basic properties of files and analysis
+print("#nset: %d" %frames.fileframes[-1])
+print("#N: %d" %frames.fparticles)
+print("#q = %f" %q)
+print("#a = %f" %radius)
 
 # Stores coordinates of all particles in initial frames
 x0 = np.empty((runset.n_runs, frames.particles), dtype=np.single)
@@ -156,6 +155,9 @@ if frames.n_atoms != None:
   powtotal = np.empty(legendre + 1, dtype=np.float64)
   powtotal[0] = frames.particles
 
+  # Create array of precomputed factorials
+  facts = np.cumprod(np.insert(np.arange(1, legendre + 1), 0, 1))
+
 # Corresponding quantities for individual runs
 run_fc = np.empty(4, dtype=np.float64)
 if frames.n_atoms != None:
@@ -167,6 +169,58 @@ if runset.rundirs == True:
   std_fc = np.empty(4, dtype=np.float64)
   if frames.n_atoms != None:
     std_ocorr = np.empty((3, legendre), dtype=np.float64)
+
+# Print description of output columns
+print("#",
+      "#Output Columns:",
+      "#  1 - Initial frame index",
+      "#  2 - Initial time",
+      "#  3 - Final frame index",
+      "#  4 - Final time",
+      "#  5 - Time difference for interval",
+      sep="\n")
+if runset.rundirs == True:
+  print("#  6 - Run average of mean squared displacement",
+        "#  7 - Run average of average overlap",
+        "#  8 - Run average of x self scattering function",
+        "#  9 - Run average of y self scattering function",
+        "#  10 - Run average of z self scattering function",
+        "#  11 - Run average of directional average self scattering function",
+        "#  12 - Standard deviation across runs of mean squared displacement",
+        "#  13 - Standard deviation across runs of average overlap",
+        "#  14 - Standard deviation across runs of x self scattering function",
+        "#  15 - Standard deviation across runs of y self scattering function",
+        "#  16 - Standard deviation across runs of z self scattering function",
+        "#  17 - Standard deviation across runs of directional average self scattering function",
+        sep="\n")
+  if frames.n_atoms != None:
+    print("#  18 - Run average of orientational correlation theta function average",
+          "#  19 - Standard deviation across runs of orientational correlation theta function average",
+          sep="\n")
+    for i in range(1, legendre + 1):
+      print("#  %d - Run average of total part of Legendre degree %d of orientational correlation function" %(6 * i + 14, i),
+            "#  %d - Run average of self part of Legendre degree %d of orientational correlation function" %(6 * i + 15, i),
+            "#  %d - Run average of distinct part of Legendre degree %d of orientational correlation function" %(6 * i + 16, i),
+            "#  %d - Standard deviation across runs of total part of Legendre degree %d of orientational correlation function" %(6 * i + 17, i),
+            "#  %d - Standard deviation across runs of self part of Legendre degree %d of orientational correlation function" %(6 * i + 18, i),
+            "#  %d - Standard deviation across runs of distinct part of Legendre degree %d of orientational correlation function" %(6 * i + 19, i),
+            sep="\n")
+else:
+  print("#  6 - Mean squared displacement",
+        "#  7 - Average overlap",
+        "#  8 - x self scattering function",
+        "#  9 - y self scattering function",
+        "#  10 - z self scattering function",
+        "#  11 - Directional average self scattering function",
+        sep="\n")
+  if frames.n_atoms != None:
+    print("#  12 - Orientational correlation theta function average")
+    for i in range(1, legendre + 1):
+      print("#  %d - Total part of Legendre degree %d of orientational correlation function" %(3 * i + 10, i),
+            "#  %d - Self part of Legendre degree %d of orientational correlation function" %(3 * i + 11, i),
+            "#  %d - Distinct part of Legendre degree %d of orientational correlation function" %(3 * i + 12, i),
+            sep="\n")
+print("#")
 
 # Iterate over initial frames, which serve as starting points for
 # functions
@@ -240,7 +294,7 @@ for i in initial:
           # product for given power
           for m in range(0, l + 1):
             for n in range(0, l + 1 - m):
-              powtotal[l] += (math.factorial(l)/(math.factorial(m)*math.factorial(n)*math.factorial(l-m-n))) * np.sum(xo0[k]**m * yo0[k]**n * zo0[k]**(l+1-m-n)) * np.sum(xo1**m * yo1**n * zo1**(l-m-n)) / frames.particles
+              powtotal[l] += (facts[l]/(facts[m]*facts[n]*facts[l-m-n])) * np.sum(xo0[k]**m * yo0[k]**n * zo0[k]**(l+1-m-n)) * np.sum(xo1**m * yo1**n * zo1**(l-m-n)) / frames.particles
 
         # Compute Legendre polynomial from powers and accumulate
         run_ocorr[0] = np.sum(legmat * powtotal, axis=1)
@@ -294,41 +348,7 @@ for i in initial:
         std_ocorr = np.sqrt(np.maximum(0.0, std_ocorr - ocorr**2) / (runset.n_runs - 1))
         std_otheta = np.sqrt(np.maximum(0.0, std_otheta - otheta**2) / (runset.n_runs - 1))
 
-      # Print output columns:
-      # (n - current Legendre degree)
-      # 1 - initial frame index
-      # 2 - initial time
-      # 3 - final frame index
-      # 4 - final time
-      # 5 - time difference for interval
-      # 6 - mean squared displacement
-      # 7 - averarge overlap run average
-      # 8 - x scattering function run average
-      # 9 - y scattering function run average
-      # 10 - z scattering function run average
-      # 11 - directional average scattering function run average
-      # 12 - mean squared displacement standard deviation
-      # 13 - average overlap standard deviation
-      # 14 - x scattering function standard deviation
-      # 15 - y scattering function standard deviation
-      # 16 - z scattering function standard deviation
-      # 17 - directional average scattering function standard deviation
-      # 18 - orientational correlation theta function average run
-      #      average (if polyatomic)
-      # 19 - orientational correlation theta function average standard
-      #      deviation (if polyatomic)
-      # 13 + 6n - orientational correlation function total part run
-      #           average
-      # 14 + 6n - orientational correlation function self part run
-      #           average
-      # 15 + 6n - orientational correlation function distinct part run
-      #           average
-      # 16 + 6n - orientational correlation function total part
-      #           standard deviation
-      # 17 + 6n - orientational correlation function self part standard
-      #           deviation
-      # 18 + 6n - orientational correlation function distinct part
-      #           standard deviation
+      # Print output columns
       sys.stdout.write("%d %f %d %f %f %f %f %f %f %f %f %f %f %f %f %f %f"
                        %(i + 1,
                          itime,
@@ -352,7 +372,7 @@ for i in initial:
                          %(otheta,
                            std_otheta))
         for k in range(0, legendre):
-          sys.stdout.write(" %f %f %f %f %f %f %f %f"
+          sys.stdout.write(" %f %f %f %f %f %f"
                            %(ocorr[0][k],
                              ocorr[1][k],
                              ocorr[2][k],
@@ -362,24 +382,7 @@ for i in initial:
       sys.stdout.write("\n")
 
     else:
-      # Print output columns:
-      # (n - current Legendre degree)
-      # 1 - initial frame index
-      # 2 - initial time
-      # 3 - final frame index
-      # 4 - final time
-      # 5 - time difference for interval
-      # 6 - mean squared displacement
-      # 7 - averarge overlap
-      # 8 - x scattering function
-      # 9 - y scattering function
-      # 10 - z scattering function
-      # 11 - directional average scattering function
-      # 12 - orientational correlation theta function average (if
-      #      polyatomic)
-      # 10 + 3n - orientational correlation function total part
-      # 11 + 3n - orientational correlation function self part
-      # 12 + 3n - orientational correlation function distinct part
+      # Print output columns
       sys.stdout.write("%d %f %d %f %f %f %f %f %f %f %f"
                        %(i + 1,
                          itime,

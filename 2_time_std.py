@@ -1,7 +1,6 @@
 import numpy as np
 import pydcd
 import sys
-import math
 import getopt
 import enum
 
@@ -175,6 +174,9 @@ if frames.n_atoms != None:
   powtotal = np.empty(legendre + 1, dtype=np.float64)
   powtotal[0] = frames.particles
 
+  # Create array of precomputed factorials
+  facts = np.cumprod(np.insert(np.arange(1, legendre + 1), 0, 1))
+
 # Corresponding quantities for individual runs
 run_msd = np.empty(lags.size, dtype=np.float64)
 run_overlap = np.empty(lags.size, dtype=np.float64)
@@ -261,7 +263,7 @@ for i in range(0, runset.n_runs):
           # product for given power
           for m in range(0, l + 1):
             for n in range(0, l + 1 - m):
-              powtotal[l] += (math.factorial(l)/(math.factorial(m)*math.factorial(n)*math.factorial(l-m-n))) * np.sum(xo0**m * yo0**n * zo0**(l+1-m-n)) * np.sum(xo1**m * yo1**n * zo1**(l-m-n)) / frames.particles
+              powtotal[l] += (facts[l]/(facts[m]*facts[n]*facts[l-m-n])) * np.sum(xo0**m * yo0**n * zo0**(l+1-m-n)) * np.sum(xo1**m * yo1**n * zo1**(l-m-n)) / frames.particles
 
         # Compute Legendre polynomial from powers and accumulate
         run_ocorr[0][index] += np.sum(legmat * powtotal, axis=1)
@@ -339,44 +341,72 @@ if runset.rundirs == True:
     std_ocorr = np.sqrt(np.maximum(0.0, std_ocorr - ocorr**2) / (runset.n_runs - 1))
     std_otheta = np.sqrt(np.maximum(0.0, std_otheta - otheta**2) / (runset.n_runs - 1))
 
+# Print description of output columns
+print("#",
+      "#Output Columns:",
+      "#  1 - Time difference constituting interval",
+      sep="\n")
+if runset.rundirs == True:
+  print("#  2 - Run average of mean squared displacement",
+        "#  3 - Run average of average overlap",
+        "#  4 - Run average of x scattering function",
+        "#  5 - Run average of y scattering function",
+        "#  6 - Run average of z scattering function",
+        "#  7 - Run average of directional average scattering function",
+        "#  8 - Standard deviation across runs of mean squared displacement",
+        "#  9 - Standard deviation across runs of average overlap",
+        "#  10 - Standard deviation across runs of x scattering function",
+        "#  11 - Standard deviation across runs of y scattering function",
+        "#  12 - Standard deviation across runs of z scattering function",
+        "#  13 - Standard deviation across runs of directional average scattering function",
+        sep="\n")
+  if frames.n_atoms != None:
+    print("#  14 - Run average of orientational correlation theta function average",
+          "#  15 - Standard deviation across runs of orientational correlation theta function average",
+          sep="\n")
+    for i in range(1, legendre + 1):
+      print("#  %d - Run average of total part of Legendre degree %d of orientational correlation function" %(6 * i + 10, i),
+            "#  %d - Run average of self part of Legendre degree %d of orientational correlation function" %(6 * i + 11, i),
+            "#  %d - Run average of distinct part of Legendre degree %d of orientational correlation function" %(6 * i + 12, i),
+            "#  %d - Standard devation across runs of total part of Legendre degree %d of orientational correlation function" %(6 * i + 13, i),
+            "#  %d - Standard devation across runs of self part of Legendre degree %d of orientational correlation function" %(6 * i + 14, i),
+            "#  %d - Standard devation across runs of distinct part of Legendre degree %d of orientational correlation function" %(6 * i + 15, i),
+            sep="\n")
+    print("#  %d - Number of frame pairs in each run with interval" %(6 * legendre + 16),
+          "#  %d - Frame difference corresponding to interval time" %(6 * legendre + 17),
+          sep="\n")
+  else:
+    print("#  14 - Number of frame pairs in each run with interval",
+          "#  15 - Frame difference corresponding to interval time",
+          sep="\n")
+else:
+  print("#  2 - Mean squared displacement",
+        "#  3 - Average overlap",
+        "#  4 - x scattering function",
+        "#  5 - y scattering function",
+        "#  6 - z scattering function",
+        "#  7 - Directional average scattering function",
+        sep="\n")
+  if frames.n_atoms != None:
+    print("#  8 - Orientational correlation theta function average")
+    for i in range(1, legendre + 1):
+      print("#  %d - Total part of Legendre degree %d of orientational correlation function" %(3 * i + 6, i),
+            "#  %d - Self part of Legendre degree %d of orientational correlation function" %(3 * i + 7, i),
+            "#  %d - Distinct part of Legendre degree %d of orientational correlation function" %(3 * i + 8, i),
+            sep="\n")
+    print("#  %d - Number of frame pairs with interval" %(3 * legendre + 9),
+          "#  %d - Frame difference corresponding to interval time" %(3 * legendre + 10),
+          sep="\n")
+  else:
+    print("#  8 - Number of frame pairs with interval",
+          "#  9 - Frame difference corresponding to interval time",
+          sep="\n")
+print("#")
+
 for i in range(0, lags.size):
   time = lags[i] * trajset.timestep * trajset.tbsave
   if runset.rundirs == True:
-    # Print output columns:
-    # (n - current Legendre degree)
-    # (m - total number of Legendre degrees)
-    # (l - 1 if polyatomic, 0 otherwise)
-    # 1 - time difference constituting interval
-    # 2 - mean squared displacement run average
-    # 3 - average overlap run average
-    # 4 - x scattering function run average
-    # 5 - y scattering function run average
-    # 6 - z scattering function run average
-    # 7 - directional average scattering function run average
-    # 8 - mean squared displacement standard deviation
-    # 9 - average overlap standard deviation
-    # 10 - x scattering function standard deviation
-    # 11 - y scattering function standard deviation
-    # 12 - z scattering function standard deviation
-    # 13 - directional average scattering function
-    # 14 - orientational correlation theta function average run average
-    #      (if polyatomic)
-    # 15 - orientational correlation theta function average standard
-    #      deviation (if polyatomic)
-    # 10 + 6n - orientational correlation function total part run
-    #           average
-    # 11 + 6n - orientational correlation function self part run
-    #           average
-    # 12 + 6n - orientational correlation function distinct part run
-    #           average
-    # 13 + 6n - orientational correlation function total part standard
-    #           deviation
-    # 14 + 6n - orientational correlation function self part standard
-    #           deviation
-    # 15 + 6n - orientational correlation function distinct part
-    #           standard deviation
-    # 14 + 6m + 2l - number of frame pairs in each run with interval
-    # 15 + 6m + 2l - frame difference corresponding to interval time
+    # Print output columns
     sys.stdout.write("%f %f %f %f %f %f %f %f %f %f %f %f %f "
                      %(time,
                        msd[i],
@@ -407,24 +437,7 @@ for i in range(0, lags.size):
                      %(norm[i],
                        lags[i]))
   else:
-    # Print output columns:
-    # (n - current Legendre degree)
-    # (m - total number of Legendre degrees)
-    # (l - 1 if polyatomic, 0 otherwise)
-    # 1 - time difference constituting interval
-    # 2 - mean squared displacement
-    # 3 - average overlap
-    # 4 - x scattering function
-    # 5 - y scattering function
-    # 6 - z scattering function
-    # 7 - directional average scattering function
-    # 8 - orientational correlation theta function average (if
-    #     polyatomic)
-    # 5 + 3n - orientational correlation function total part
-    # 6 + 3n - orientational correlation function self part
-    # 7 + 3n - orientational correlation function distinct part
-    # 8 + 3m + l - number of frame pairs with interval
-    # 9 + 3m + l - frame difference corresponding to interval time
+    # Print output columns
     sys.stdout.write("%f %f %f %f %f %f %f "
                      %(time,
                        msd[i],

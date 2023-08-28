@@ -236,6 +236,29 @@ print("#t_c = %d" %tc)
 # Print information about w function calculation
 wcalc.print_info()
 
+# Create legend with description of output columns
+legend = "#\n" \
+         + "#Output Columns:\n" \
+         + "#  1 - t_b\n"
+if qshell_active == True:
+  legend += "#  2 - q vector magnitude (in first region) or midpoint of q onion shell (in second region)\n" \
+            + "#  3 - Number of q vectors with given magnitude or in given shell\n"
+  col_offset1 = 3
+else:
+  legend += "#  2 - x component of q vector\n" \
+            + "#  3 - y component of q vector\n" \
+            + "#  4 - z component of q vector\n"
+  col_offset1 = 4
+legend += "#  %d - Run average of total part of S4\n" %(col_offset1 + 1) \
+          + "#  %d - Run average of self part of S4\n" %(col_offset1 + 2) \
+          + "#  %d - Run average of distinct part of S4\n" %(col_offset1 + 3) \
+          + "#  %d - Standard deviation across runs of total part of S4\n" %(col_offset1 + 4) \
+          + "#  %d - Standard deviation across runs of self part of S4\n" %(col_offset1 + 5) \
+          + "#  %d - Standard deviation across runs of distinct part of S4\n" %(col_offset1 + 6) \
+          + "#  %d - Number of frame sets in each run contributing to average of quantities\n" %(col_offset1 + 7) \
+          + "#  %d - Frame difference corresponding to t_b\n" %(col_offset1 + 8) \
+          + "#\n"
+
 # S4 calcuation
 
 print("Entering S4 calculation", file=sys.stderr)
@@ -243,6 +266,7 @@ print("Entering S4 calculation", file=sys.stderr)
 # If output files not used, write to stdout
 if dumpfiles == False:
   outfile = sys.stdout
+  outfile.write(legend)
 
 # Iterate over average interval lengths (t_b)
 for index, tb in enumerate(tbvals):
@@ -470,6 +494,7 @@ for index, tb in enumerate(tbvals):
   # If output files used, open file for current t_b value
   if dumpfiles == True:
     outfile = open("tb_%f" %(tbvals[index]), "w")
+    outfile.write(legend)
 
   # If q vector shells used, sort by q vector magnitude into onion
   # shells and discrete magnitudes and print the averages of values for
@@ -477,19 +502,7 @@ for index, tb in enumerate(tbvals):
   if qshell_active == True:
     discrete_s4, shell_s4 = qshell.to_shells(s4)
 
-    # Print output columns for first region disctinct q magnitudes:
-    # 1 - t_b
-    # 2 - q vector magnitude
-    # 3 - number of q vectors with given magnitude
-    # 4 - S4 total component run average
-    # 5 - S4 self component run average
-    # 6 - S4 distinct component run average
-    # 7 - S4 total component standard deviation
-    # 8 - S4 self component standard deviation
-    # 9 - S4 distinct component standard deviation
-    # 10 - number of frame sets in each run contributing to
-    #      average of quantities
-    # 11 - frame difference corresponding to t_b
+    # Print output columns for first region disctinct q magnitudes
     for i in range(0, discrete_s4.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
                     %(time_tb,
@@ -504,19 +517,7 @@ for index, tb in enumerate(tbvals):
                       norm,
                       tb))
 
-    # Print output columns for second region q magnitude onion shells:
-    # 1 - t_b
-    # 2 - q magnitude of midpoint of onion shells
-    # 3 - number of q vectors within magnitude range of shell
-    # 4 - S4 total component run average
-    # 5 - S4 self component run average
-    # 6 - S4 distinct component run average
-    # 7 - S4 total component standard deviation
-    # 8 - S4 self component standard deviation
-    # 9 - S4 distinct component standard deviation
-    # 10 - number of frame sets in each run contributing to
-    #      average of quantities
-    # 11 - frame difference corresponding to t_b
+    # Print output columns for second region q magnitude onion shells
     for i in range(0, shell_s4.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %d %d\n"
                     %(time_tb,
@@ -531,25 +532,11 @@ for index, tb in enumerate(tbvals):
                       norm,
                       tb))
 
-  # If q vector shells not used, print all elements
+  # If q vector shells not used, print output columns for all q vectors
   else:
     for i in range(0, 2*size_ft - 1):
       for j in range(0, 2*size_ft - 1):
         for k in range(0, size_ft):
-          # Print output columns:
-          # 1 - t_b
-          # 2 - x component of fft frequency
-          # 3 - y component of fft frequency
-          # 4 - z component of fft frequency
-          # 5 - S4 total component run average
-          # 6 - S4 self component run average
-          # 7 - S4 distinct component run average
-          # 8 - S4 total component standard deviation
-          # 9 - S4 self component standard deviation
-          # 10 - S4 distinct component standard deviation
-          # 11 - number of frame sets in each run contributing to
-          #      average of quantities
-          # 12 - frame difference corresponding to t_b
           outfile.write("%f %f %f %f %f %f %f %f %f %f %d %d\n"
                         %(time_tb,
                           qs_full[i],

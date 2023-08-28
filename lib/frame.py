@@ -53,6 +53,29 @@ class frames():
     """
     self.trajset = trajset
 
+  def alloc_arrays(self):
+    """
+    Allocate arrays for use later in reading of frames. Meant to be
+    called internally rather than by user.
+    """
+    # If particle limiting required or polyatomic molecules used,
+    # allocate intermediate arrays for particle reading
+    if self.limit_particles == True or self.n_atoms != None:
+      self.x = np.empty(self.fparticles, dtype=np.single)
+      self.y = np.empty(self.fparticles, dtype=np.single)
+      self.z = np.empty(self.fparticles, dtype=np.single)
+
+    # Array for center of mass of each frame
+    self.cm = np.empty((self.n_runs, self.n_frames, 3), dtype=np.float64)
+
+    # Bitmap of values indicating whether the center of mass for a
+    # given frame has been calculated and stored in self.cm
+    self.cm_def = np.zeros((self.n_runs, (self.n_frames + 7) // 8), dtype=np.uint8)
+
+    # Arrays of particles on which analysis takes place are
+    # not allocated here, instead being passed to functions, so that
+    # the user may make decisions about their allocation and re-use.
+
   def prepare(self):
     """
     Set internal attributes based on results of argument processing and
@@ -131,23 +154,7 @@ class frames():
 
     self.n_frames = self.final - self.start
 
-    # If particle limiting required or polyatomic molecules used,
-    # allocate intermediate arrays for particle reading
-    if self.limit_particles == True or self.n_atoms != None:
-      self.x = np.empty(self.fparticles, dtype=np.single)
-      self.y = np.empty(self.fparticles, dtype=np.single)
-      self.z = np.empty(self.fparticles, dtype=np.single)
-
-    # Array for center of mass of each frame
-    self.cm = np.empty((self.n_runs, self.n_frames, 3), dtype=np.float64)
-
-    # Bitmap of values indicating whether the center of mass for a
-    # given frame has been calculated and stored in self.cm
-    self.cm_def = np.zeros((self.n_runs, (self.n_frames + 7) // 8), dtype=np.uint8)
-
-    # Arrays of particles on which analysis takes place are
-    # not allocated here, instead being passed to functions, so that
-    # the user may make decisions about their allocation and re-use.
+    self.alloc_arrays()
 
   def lookup_frame(self, t):
     """
@@ -264,12 +271,18 @@ class frames():
   def shift_start(self, shift_index):
     """
     Shift the start of the frame set by a given amount. Should be
-    called before prepare().
+    called after prepare().
 
     Arguments:
       shift_index: int - Number of frames to shift by
     """
     self.start += shift_index
+
+    # New number of frames
+    self.n_frames = self.final - self.start
+
+    # Reallocate arrays for new number of frames
+    self.alloc_arrays()
 
   def catch_opt(self, o, a):
     """

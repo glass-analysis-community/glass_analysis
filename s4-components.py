@@ -347,11 +347,37 @@ def div_fill(a, b, nonzeromask, zerovals, mat, constmat):
 
   return f
 
+# Create legend with description of output columns
+legend = "#\n" \
+         + "#Output columns:\n" \
+         + "#  1 - t_a\n"
+if qshell_active == True:
+  legend += "#  2 - q vector magnitude (in first region) or midpoint of q onion shell (in second region)\n" \
+            + "#  3 - Number of q vectors with given magnitude or in given shell\n"
+  col_offset1 = 3
+else:
+  legend += "#  2 - x component of q vector\n" \
+            + "#  3 - y component of q vector\n" \
+            + "#  4 - z component of q vector\n"
+  col_offset1 = 4
+legend += "#  %d - Run average of S4^st (S4 initial structure contribution)\n" %(col_offset1 + 1) \
+          + "#  %d - Run average of S4^cr (S4 collective relaxation contribution)\n" %(col_offset1 + 2) \
+          + "#  %d - Run average of S4^mc (S4 mixed collective contribution)\n" %(col_offset1 + 3) \
+          + "#  %d - Run average of S4^sp (S4 single particle oscillation contribution)\n" %(col_offset1 + 4) \
+          + "#  %d - Standard deviation across runs of S4^st\n" %(col_offset1 + 5) \
+          + "#  %d - Standard deviation across runs of S4^cr\n" %(col_offset1 + 6) \
+          + "#  %d - Standard deviation across runs of S4^mc\n" %(col_offset1 + 7) \
+          + "#  %d - Standard deviation across runs of S4^sp\n" %(col_offset1 + 8) \
+          + "#  %d - Number of frame sets in each run contributing to average of quantities\n" %(col_offset1 + 9) \
+          + "#  %d - Frame difference corresponding to t_a\n" %(col_offset1 + 10) \
+          + "#\n"
+
 print("Entering S4 components calculation", file=sys.stderr)
 
 # If output files not used, write to stdout
 if dumpfiles == False:
   outfile = sys.stdout
+  outfile.write(legend)
 
 # Accumulated total number of zero elements of divisor matrices
 zero_acc = 0
@@ -644,25 +670,12 @@ for index, ta in enumerate(lags):
   # If output files used, open file for current lag
   if dumpfiles == True:
     outfile = open("lag_%f" %(lags[index]), "w")
+    outfile.write(legend)
 
   # If q vector shells, used print according to discrete and shell q
-  # magnitudes. Otherwise, print all vectors of 3-dimensional matrix.
+  # magnitudes
   if qshell_active == True:
-    # Print output columns for first region disctinct q magnitudes:
-    # 1 - t_a
-    # 2 - q vector magnitude
-    # 3 - number of q vectors with given magnitude
-    # 4 - S4^st (S4 initial structure contribution)
-    # 5 - S4^cr (S4 collective relaxation contribution)
-    # 6 - S4^mc (S4 mixed collective contribution)
-    # 7 - S4^sp (S4 single particle oscillation contribution)
-    # 8 - S4^st standard deviation
-    # 9 - S4^cr standard deviation
-    # 10 - S4^mc standard deviation
-    # 11 - S4^sp standard deviation
-    # 12 - number of frame sets in each run contributing to average of
-    #      quantities
-    # 13 - frame difference corresponding to t_a
+    # Print output columns for first region distinct q magnitudes
     for i in range(0, s4_discrete.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %f %f %d %d\n"
                     %(time_ta,
@@ -679,21 +692,7 @@ for index, ta in enumerate(lags):
                       norm,
                       ta))
 
-    # Print output columns for second region q magnitude onion shells:
-    # 1 - t_a
-    # 2 - q magnitude of midpoint of onion shells
-    # 3 - number of q vectors with given magnitude
-    # 4 - S4^st (S4 initial structure contribution)
-    # 5 - S4^cr (S4 collective relaxation contribution)
-    # 6 - S4^mc (S4 mixed collective contribution)
-    # 7 - S4^sp (S4 single particle oscillation contribution)
-    # 8 - S4^st standard deviation
-    # 9 - S4^cr standard deviation
-    # 10 - S4^mc standard deviation
-    # 11 - S4^sp standard deviation
-    # 12 - number of frame sets in each run contributing to average of
-    #      quantities
-    # 13 - frame difference corresponding to t_a
+    # Print output columns for second region q magnitude onion shells
     for i in range(0, s4_shells.shape[-1]):
       outfile.write("%f %f %d %f %f %f %f %f %f %f %f %d %d\n"
                     %(time_ta,
@@ -710,25 +709,11 @@ for index, ta in enumerate(lags):
                       norm,
                       ta))
 
+  # If q vector shells not used, print output columns for all q vectors
   else:
     for i in range(0, size_fft):
       for j in range(0, size_fft):
         for k in range(0, (size_fft // 2) + 1):
-          # 1 - t_a
-          # 2 - x component of fft frequency
-          # 3 - y component of fft frequency
-          # 4 - z component of fft frequency
-          # 5 - S4^st (S4 initial structure contribution)
-          # 6 - S4^cr (S4 collective relaxation contribution)
-          # 7 - S4^mc (S4 mixed collective contribution)
-          # 8 - S4^sp (S4 single particle oscillation contribution)
-          # 9 - S4^st standard deviation
-          # 10 - S4^cr standard deviation
-          # 11 - S4^mc standard deviation
-          # 12 - S4^sp standard deviation
-          # 13 - number of frame sets in each run contributing to
-          #      average of quantities
-          # 14 - frame difference corresponding to t_a
           outfile.write("%f %f %f %f %f %f %f %f %f %f %f %f %d %d\n"
                         %(time_ta,
                           (i-size_fft//2)*2*math.pi/box_size,

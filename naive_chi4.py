@@ -194,17 +194,23 @@ var_fc /= norm.reshape((lags.size, 1))
 # Normalize the overlap, thereby obtaining an average over each pair of frames
 var_overlap /= norm
 
+# Print description of output columns
+print("#",
+      "#Output Columns:",
+      "#  1 - Time difference constituting interval",
+      "#  2 - Variance across runs of average overlap",
+      "#  3 - Variance across runs of x scattering function",
+      "#  4 - Variance across runs of y scattering function",
+      "#  5 - Variance across runs of z scattering function",
+      "#  6 - Variance across runs of directional average scattering function",
+      "#  7 - Number of frame pairs with interval",
+      "#  8 - Frame difference corresponding to interval time",
+      "#",
+      sep="\n")
+
 for i in range(0, lags.size):
   time = lags[i] * trajset.timestep * trajset.tbsave
-  # Print output columns:
-  # 1 - time difference constituting interval
-  # 2 - variance of average overlap
-  # 3 - variance of x scattering function
-  # 4 - variance of y scattering function
-  # 5 - variance of z scattering function
-  # 6 - variance of directional average of scattering function
-  # 7 - number of frame pairs with interval
-  # 8 - frame difference corresponding to interval time
+  # Print output columns
   print("%f %f %f %f %f %f %d %d"
         %(time,
           var_overlap[i],
