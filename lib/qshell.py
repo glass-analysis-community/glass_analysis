@@ -21,6 +21,10 @@ class qshell():
     qb2a: float - qb2 expressed as a multiple of the smallest positive
       q magnitude that is periodic within box boundaries, corresponding
       to the q increment represented by each FFT cell.
+    qb2s: int - Largest element withi qb2 which will fit inside smaller
+      direction of values in fft matrix
+    qb2g: int - Largest element withi qb2 which will fit inside greater
+      direction of values in fft matrix
     shells: int - Number of onion shells to use in second region
     swidth: float - Width of each onion shell in second region
     trim_q2: tuple - Tuple used for trimming input values to be sorted
@@ -56,8 +60,9 @@ class qshell():
     Prepare qshell object for sorting values into shells later.
     Calculate shell for each spatial element (element_qs), record
     number of elements for each shell (qnorm*), record values of each
-    shell or discrete magnitude (qlist*), save size_fft, and calculate
-    limits of FFT spatial elements used in shells (qb2l, qb2u).
+    shell or discrete magnitude (qlist*), save size_fft, create initial
+    trimming range for sorted values (trim_q2), and calculate limits of
+    FFT spatial elements used in shells (qb2g, qb2s).
 
     Arguments:
       size_fft: int - Number of FFT elements in each dimension
@@ -77,16 +82,16 @@ class qshell():
     self.qb1a = self.qb1 * box_size / (2 * math.pi)
     self.qb2a = self.qb2 * box_size / (2 * math.pi)
 
-    # Upper and lower bounds for dimensions of q that fit within
-    # second q magnitude region
-    qb2l = max(-int(self.qb2a), -(size_fft // 2))
-    qb2u = min(int(self.qb2a), (size_fft - 1) // 2)
+    # Greater and smaller bounds for dimensions of q that fit within
+    # second q magnitude region, for different directional behaviours
+    self.qb2g = min(int(self.qb2a), size_fft // 2)
+    self.qb2s = min(int(self.qb2a), (size_fft - 1) // 2)
 
     # Tuple used for trimming input values arrays to used values that
     # fall withing second q magnitude region
-    self.trim_q2 = (slice(size_fft//2 + qb2l, size_fft//2 + qb2u + 1),
-                    slice(size_fft//2 + qb2l, size_fft//2 + qb2u + 1),
-                    slice(0, qb2u + 1))
+    self.trim_q2 = (slice(size_fft//2 - self.qb2g, size_fft//2 + self.qb2s + 1),
+                    slice(size_fft//2 - self.qb2g, size_fft//2 + self.qb2s + 1),
+                    slice(0, self.qb2g + 1))
 
     # Shell width
     if self.shells != 0:
@@ -96,11 +101,11 @@ class qshell():
     self.qlist_shells = np.arange(0, self.shells)
 
     # Construct array of squared hypotenuses (q magnitudes)
-    hyp = np.zeros((qb2u + 1 - qb2l, qb2u + 1 - qb2l, qb2u + 1), dtype=np.float64)
-    dim_contrib = np.arange(qb2l, qb2u + 1)**2
-    hyp += dim_contrib[-qb2l:]
-    hyp += dim_contrib[:,None]
-    hyp += dim_contrib[:,None,None]
+    hyp = np.zeros((self.qb2g + 1 + self.qb2s, ) * 3, dtype=np.float64)
+    dim_contrib = np.arange(-self.qb2g, 1 + self.qb2g)**2
+    hyp += dim_contrib[self.qb2g-self.qb2s:]
+    hyp += dim_contrib[:self.qb2g+1+self.qb2s,None]
+    hyp += dim_contrib[:self.qb2g+1+self.qb2s,None,None]
 
     # Find list of q magitude values that fall within first discrete
     # q magnitude region, as well as number of elements contributing
@@ -136,6 +141,10 @@ class qshell():
     # correspond to correct index in qnorm.
     self.element_qs = element_qs_discrete.reshape(hyp.shape) + element_qs_shells
 
+    # Cut out portion of FFT elements array to account for reduced size
+    # due to real-valued FFT
+    self.element_qs = self.element_qs[...,self.qb2s:]
+
   def to_shells(self, values):
     """
     Sort a set of FFT values organized by spatial dimension into
@@ -148,7 +157,8 @@ class qshell():
     Arguments:
       values: np.array() -  Values to be sorted and averaged into
         output values based on q magnitude. Last three dimensions are
-        taken to be x, y, and z spatial indices for q vector.
+        taken to be x, y, and z spatial indices for q vector. The
+        values may be modified.
     """
     # Create accumulators for values with same shape as input values
     # array, except for last three dimensions, which are spatial
@@ -156,9 +166,18 @@ class qshell():
     # index
     qout = np.zeros_like(values[...,0,0,0], shape=(*(values[...,0,0,0].shape), len(self.qnorm)))
 
+    # Trim to only include used elements
+    mod_values = values[(...,*self.trim_q2)]
+
+    # Account for both directions of q vector for elements that have
+    # combined due to real-valued FFT. qnorm accounts for this due to
+    # the way the array of hypotenuses was constructed during
+    # preparation.
+    mod_values[...,1:1+self.qb2s] *= 2
+
     # Bin values according to q magnitude index in element_qs
     for i in np.ndindex(values[...,0,0,0].shape):
-      qout[i] = np.histogram(self.element_qs, bins=len(self.qnorm), range=(-0.5, len(self.qnorm) - 0.5), weights=values[i][self.trim_q2])[0]
+      qout[i] = np.histogram(self.element_qs, bins=len(self.qnorm), range=(-0.5, len(self.qnorm) - 0.5), weights=mod_values[i])[0]
 
     # Normalize q values for number of contributing elements
     qout /= self.qnorm
