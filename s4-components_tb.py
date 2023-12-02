@@ -70,6 +70,7 @@ try:
                                                frames.shortopts +
                                                wcalc.shortopts +
                                                qshell.shortopts,
+                                               trajset.longopts +
                                                prog.longopts)
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)

@@ -53,6 +53,7 @@ try:
                                                trajset2.shortopts +
                                                frames.shortopts,
                                                ["polyatomic-thetab=", "polyatomic-legendre="] +
+                                               trajset1.longopts +
                                                frames.longopts)
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)

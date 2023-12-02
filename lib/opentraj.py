@@ -2,6 +2,79 @@ import numpy as np
 import sys
 import pydcd
 
+global_options_printed = False
+one_open = False
+
+class dcdfile_w:
+  """
+  Wrapper for dcdfile class of pydcd library
+
+  Attributes:
+    dcdfile: dcdfile - Underlying dcdfile object from pydcd.
+    filename: str - Name of path to DCD file, only used when opening
+      files one at a time. Value of None if opening all files at once
+      (default).
+    (other attributes mirror dcdfile attributes)
+  """
+
+  def __init__(self, dcdfile, filename=None):
+    """
+    Create dcdfile_w object
+
+    Arguments:
+      dcdfile: dcdfile - dcdfile to wrap
+      filename: str - Pathname to file, only specified if opening one
+        at a time.
+    """
+    self.dcdfile = dcdfile
+    self.filename = filename
+
+    self.N = self.dcdfile.N
+    self.nset = self.dcdfile.nset
+    self.itstart = self.dcdfile.itstart
+    self.tbsave = self.dcdfile.tbsave
+    self.timestep = self.dcdfile.timestep
+    self.wcell = self.dcdfile.wcell
+
+    # If opening DCD files one at a time, close DCD file
+    if filename != None:
+      del self.dcdfile
+
+  def prepare_from_filename(self):
+    # The file object can be discarded after converting it to a
+    # dcd_file, as the dcd_file duplicates the underlying file
+    # descriptor.
+    file = open(self.filename, "r")
+    self.dcdfile = pydcd.dcdfile(file)
+    file.close()
+
+  def gdcdp(self, x_array, y_array, z_array, pos):
+    if self.filename != None:
+      self.prepare_from_filename()
+
+    self.dcdfile.gdcdp(x_array, y_array, z_array, pos)
+
+    if self.filename != None:
+      del self.dcdfile
+
+  def sdcdp(self, x_array, y_array, z_array, pos):
+    if self.filename != None:
+      self.prepare_from_filename()
+
+    self.dcdfile.sdcdp(x_array, y_array, z_array, pos)
+
+    if self.filename != None:
+      del self.dcdfile
+
+  def adcdp(self, x_array, y_array, z_array):
+    if self.filename != None:
+      self.prepare_from_filename()
+
+    self.dcdfile.adcdp(x_array, y_array, z_array)
+
+    if self.filename != None:
+      del self.dcdfile
+
 class runset():
   """
   Attributes:
@@ -72,6 +145,8 @@ class trajset():
       for this trajectory set.
     shortopts: str - List of short options processed by this module,
       used by gnu_getopt()
+    longopts: str - List of long options processed by this module, used
+      by gnu_getopt()
 
     tbsave: int - Simulation step difference between each saved frame.
       Set if tbsave is constant across files.
@@ -79,6 +154,7 @@ class trajset():
       each saved frame for each file number. Set if tbsave is not
       constant across files.
   """
+  longopts = ["one-open"]
 
   def __init__(self, runset, opt="n", name="traj", default_n_files=1):
     """
@@ -105,6 +181,8 @@ class trajset():
     attributes. Not meant to be called by the user. Instead, use
     opentraj() or opentraj_multirun().
     """
+    global one_open
+
     # Returned list of dcd file objects
     dcdfiles = list()
 
@@ -122,7 +200,10 @@ class trajset():
       # dcd_file, as the dcd_file duplicates the underlying file
       # descriptor.
       file = open("%s%d.dcd" %(path, n_start + i), "r")
-      dcdfiles.append(pydcd.dcdfile(file))
+      if one_open == True:
+        dcdfiles.append(dcdfile_w(pydcd.dcdfile(file), filename="%s%d.dcd" %(path, n_start + i)))
+      else:
+        dcdfiles.append(pydcd.dcdfile(file))
       file.close()
 
       # Make sure each trajectory file has the same time step and number
@@ -243,8 +324,12 @@ class trajset():
       a: str - Value of option to process, from array produced by
                gnu_getopt().
     """
+    global one_open
+
     if o == "-" + self.opt:
       self.n_files = int(a)
+    elif o == "--one-open":
+      one_open = True
     else:
       # Option not matched
       return False
@@ -256,4 +341,9 @@ class trajset():
     Print help documentation for options processed by the opentraj
     module.
     """
+    global global_options_printed
+
     print("-%s Number of %s<n>.dcd files" %(self.opt, self.name), file=sys.stderr)
+    if global_options_printed == False:
+      print("--one-open Open DCD files one at a time instead of simultaneously", file=sys.stderr)
+      global_options_printed = True

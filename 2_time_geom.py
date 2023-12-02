@@ -57,6 +57,7 @@ try:
                                                frames.shortopts +
                                                prog.shortopts,
                                                ["polyatomic-thetab=", "polyatomic-legendre="] +
+                                               trajset.longopts +
                                                prog.longopts +
                                                frames.longopts)
 except getopt.GetoptError as err:
