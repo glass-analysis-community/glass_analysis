@@ -47,6 +47,7 @@ try:
                                                frames.shortopts +
                                                prog.shortopts,
                                                trajset.longopts +
+                                               frames.longopts +
                                                prog.longopts)
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)

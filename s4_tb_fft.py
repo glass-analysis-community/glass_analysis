@@ -79,7 +79,8 @@ try:
                                                wcalc.shortopts +
                                                qshell.shortopts,
                                                trajset.longopts +
-                                               prog.longopts)
+                                               prog.longopts +
+                                               frames.longopts)
 except getopt.GetoptError as err:
   print(err, file=sys.stderr)
   usage()
