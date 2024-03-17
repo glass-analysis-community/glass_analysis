@@ -1,5 +1,6 @@
-All scripts were developed to run with python 3.7 or higher. Compatible python
-versions may be loaded on the following systems with:
+All scripts were developed to run with python 3.7 or higher and numpy 1.17.0
+or higher. Compatible python versions may be loaded on the following systems
+with:
 
 OSC Pitzer: module load python/3.7-2019.10
 NCSA Delta: module load python/3.10.4
