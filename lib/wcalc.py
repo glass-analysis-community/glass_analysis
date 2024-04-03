@@ -25,9 +25,16 @@ class wcalc():
     wtype: wtypes - Type of w function to use
     shortopts: str - List of short options processed by this module,
                      used by gnu_getopt()
+    argtext: str - Description of arguments processed by this module
   """
   wtype = None
+
   shortopts = "t:u:e:"
+
+  argtext = "w function types (last specified is used, must be specified):\n" \
+            + "  -t Theta function threshold (argument is threshold radius)\n" \
+            + "  -u Double negative exponential/Gaussian (argument is exponential length)\n" \
+            + "  -e Single negative exponential (argument is exponential length)"
 
   def __init__(self, frames):
     """
@@ -142,13 +149,3 @@ class wcalc():
       return False
 
     return True
-
-  def usage(self):
-    """
-    Print help documentation for options processed by the wcalc module.
-    """
-    print("w function types (last specified is used, must be specified):",
-          "-t Theta function threshold (argument is threshold radius)",
-          "-u Double negative exponential/Gaussian (argument is exponential length)",
-          "-e Single negative exponential (argument is exponential length)",
-          sep="\n", file=sys.stderr)

@@ -29,6 +29,7 @@ class frames():
       used by gnu_getopt()
     longopts: str - List of long options processed by this module, used
       by gnu_getopt()
+    argtext: str - Description of arguments processed by this module
   """
   limit_particles = False
   upper_limit = None
@@ -40,6 +41,13 @@ class frames():
 
   shortopts = "s:m:o:p:"
   longopts = ["polyatomic=", "polyatomic-masses="]
+
+  argtext = "-s Frame number to start on (index starts at 1)\n" \
+            + "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)\n" \
+            + "-o Start index (from 1) of particles to limit analysis to\n" \
+            + "-p End index (from 1) of particles to limit analysis to\n" \
+            + "--polyatomic Trajectory file contains sets of atom coordinates from molecules, argument is number of atoms in molecule\n" \
+            + "--polyatomic-masses Proportional mass of each atom in each molecule, argument is comma-separated list (default: equal masses)"
 
   def __init__(self, trajset):
     """
@@ -313,15 +321,3 @@ class frames():
       return False
 
     return True
-
-  def usage(self):
-    """
-    Print help documentation for options processed by the frame module.
-    """
-    print("-s Frame number to start on (index starts at 1)",
-          "-m Last frame number in range to use for analysis, either final or initial times (index starts at 1)",
-          "-o Start index (from 1) of particles to limit analysis to",
-          "-p End index (from 1) of particles to limit analysis to",
-          "--polyatomic Trajectory file contains sets of atom coordinates from molecules, argument is number of atoms in molecule",
-          "--polyatomic-masses Proportional mass of each atom in each molecule, argument is comma-separated list (default: equal masses)",
-          sep="\n", file=sys.stderr)

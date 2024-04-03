@@ -8,6 +8,9 @@ class qshell():
   length.
 
   Attributes:
+    active: bool - Whether or not q vector shells, and therefore this
+      module, is to be used, as determined by whether or not an
+      argument for qshell has been specified on the command line
     qb1: float - Upper (included) boundary of range of q magnitudes
       included in first region, which are recorded according to
       discrete magnitudes. Value is in real units.
@@ -48,12 +51,20 @@ class qshell():
       magnitude range in qlist_shells
     shortopts: str - List of short options processed by this module,
       used by gnu_getopt()
+    argtext: str - Description of arguments processed by this module
   """
-  shortopts = "q:v:l:"
+  active = False
 
   qb1 = None
   qb2 = None
   shells = None
+
+  shortopts = "q:v:l:"
+
+  argtext = "q-vector shell sorting:\n" \
+            + "  -q Upper boundary for first q region with discrete q values\n" \
+            + "  -v Upper boundary for second q region divided into onion shells\n" \
+            + "  -l Number of onion shells to use in second q region"
 
   def prepare(self, size_fft, box_size):
     """
@@ -155,10 +166,10 @@ class qshell():
     for q magnitudes is last dimension of returned arrays.
 
     Arguments:
-      values: np.array() -  Values to be sorted and averaged into
-        output values based on q magnitude. Last three dimensions are
-        taken to be x, y, and z spatial indices for q vector. The
-        values may be modified.
+      values: np.array() - Values to be sorted and averaged into output
+        values based on q magnitude. Last three dimensions are taken to
+        be x, y, and z spatial indices for q vector. The values may be
+        modified.
     """
     # Create accumulators for values with same shape as input values
     # array, except for last three dimensions, which are spatial
@@ -207,14 +218,5 @@ class qshell():
       # Option not matched
       return False
 
+    self.active = True
     return True
-
-  def usage(self):
-    """
-    Print help documentation for options processed by the qshell module.
-    """
-    print("q-vector shell sorting:",
-          "-q Upper boundary for first q region with discrete q values",
-          "-v Upper boundary for second q region divided into onion shells",
-          "-l Number of onion shells to use in second q region",
-          sep="\n", file=sys.stderr)
