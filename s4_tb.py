@@ -266,12 +266,12 @@ def main_func(svars, prog, runset, trajset, frames, wcalc, qshell):
           continue
 
         # Get starting frame for first interval and store in x0, y0, z0
-        frames.get_frame(j, x0, y0, z0, i)
+        wcalc.get_w_half(j, x0, y0, z0, i)
 
         # If needed, get starting frame for second interval and store
         # in x2, y2, z2
         if svars.ta - svars.tc != 0:
-          frames.get_frame(j + svars.ta - svars.tc, x2, y2, z2, i)
+          wcalc.get_w_half(j + svars.ta - svars.tc, x2, y2, z2, i)
 
         # Calculate w values for first interval
         wcalc.calculate_w_half(w[0], x0, y0, z0, j + tb - svars.tc, x1, y1, z1, i)
