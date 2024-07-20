@@ -21,6 +21,11 @@ Scripts analyzing multiple runs are run from a directory with run*/ folders,
 which in turn contain traj*.dcd files. Scripts may be run with the -h
 option in order to print documentation of their options.
 
+Most scripts make use of shared functionality located in modules in the lib/
+directory. To ensure these modules are found at runtime, it is recommended
+that the scripts be run while they are in a full cloned repository. lib/
+modules could potentially be useful in the development of further scripts.
+
 The scripts are:
 
 generate_random.py
@@ -35,12 +40,12 @@ metadata.py
   times. Frames are assumed to be evenly spaced.
 
 2_time_aging.py
-  Same as template_combined.py, but for first region of custom equilibriation
+  Same as 2_time_std.py, but for first region of custom equilibriation
   trajectories. In this region, the frames are not evenly spaced, instead
   roughly following a geometric progression.
 
 2_time_geom.py
-  Same as template_combined.py, but for second region of custom equilibriation
+  Same as 2_time_std.py, but for second region of custom equilibriation
   trajectories. In this region, the frames are not evenly spaced, instead
   following a repeating uneven progression.
 
@@ -112,8 +117,3 @@ s4-components_tb.py
   of q, with q magnitudes under a certain threshold being reported
   individually, and q magnitudes above such threshold being binned into sets
   of onion shells each holding a range of magnitudes.
-
-Most scripts make use of shared functionality located in modules in the lib/
-directory. To ensure these modules are found at runtime, it is recommended
-that the scripts be run while in a full cloned repository. lib/ modules could
-potentially be useful in the development of further scripts.
