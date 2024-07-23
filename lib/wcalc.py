@@ -37,7 +37,7 @@ class wcalc():
             + "  -t Theta function threshold (argument is threshold radius)\n" \
             + "  -u Double negative exponential/Gaussian (argument is exponential length)\n" \
             + "  -e Single negative exponential (argument is exponential length)\n" \
-            + "  --dir-theta Orientaional theta function (argument is threshold of cosine value)"
+            + "  --dir-theta Orientational theta function (argument is threshold of cosine value)"
 
   def __init__(self, frames):
     """
@@ -133,7 +133,7 @@ class wcalc():
       run: int - Index of run to read from
     """
     # Get start frame values
-    self.frames.get_w_half(t0, x0, y0, z0, run)
+    self.get_w_half(t0, x0, y0, z0, run)
 
     # Get end frame values and calculate w
     self.calculate_w_half(w, x0, y0, z0, t1, x1, y1, z1, run)
