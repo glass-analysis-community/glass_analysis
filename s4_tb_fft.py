@@ -24,9 +24,9 @@ class svars:
   # User-defined value of dimension of box, assumed to be cubic
   box_size = None
   # Offset between centers of beginning and end intervals (t_a)
-  ta = 0
+  ta = 1
   # Half difference between length of initial and end intervals (t_c)
-  tc = 0
+  tc = -1
   # Whether to write output to files rather than stdout
   dumpfiles = False
 
